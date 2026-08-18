@@ -8,6 +8,12 @@ on:
     paths:
       - 'gta-x360-tools/**'
       - '.github/workflows/gta-x360-tools.yml'
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'gta-x360-tools/**'
+      - '.github/workflows/gta-x360-tools.yml'
 
 jobs:
   build:
