@@ -13,6 +13,7 @@
         android:usesCleartextTraffic="true">
         <activity android:name=".PlaybackActivity" android:screenOrientation="landscape" />
         <activity android:name=".OkRuPlaybackActivity" android:screenOrientation="landscape" android:hardwareAccelerated="true" />
+        <activity android:name=".TeraBoxPlaybackActivity" android:screenOrientation="landscape" android:hardwareAccelerated="true" />
         <activity android:name=".DetailActivity" android:screenOrientation="landscape" />
         <activity android:name=".MainActivity" android:screenOrientation="landscape" android:exported="true">
             <intent-filter>
