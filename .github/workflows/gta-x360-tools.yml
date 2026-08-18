@@ -1,0 +1,49 @@
+name: Build GTA X360 Android Tools
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - agent/gta-x360-tools
+    paths:
+      - 'gta-x360-tools/**'
+      - '.github/workflows/gta-x360-tools.yml'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Gradle 8.9
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Build APKs
+        working-directory: gta-x360-tools
+        run: gradle --no-daemon :rpfexplorer:assembleDebug :xscdecompiler:assembleDebug
+
+      - name: Collect APKs
+        run: |
+          mkdir -p apks
+          cp gta-x360-tools/rpfexplorer/build/outputs/apk/debug/rpfexplorer-debug.apk apks/RPF7-Explorer-360.apk
+          cp gta-x360-tools/xscdecompiler/build/outputs/apk/debug/xscdecompiler-debug.apk apks/XSC-Decompiler-360.apk
+          (cd gta-x360-tools && zip -r ../apks/GTA-X360-Android-Tools-Source.zip . -x '*/build/*')
+
+      - name: Upload APKs and source
+        uses: actions/upload-artifact@v4
+        with:
+          name: GTA-X360-Android-Tools
+          path: apks/*
+          if-no-files-found: error
