@@ -1,16 +1,20 @@
 package com.diniz.iptv.admin;
 
-import android.content.*;
+import android.content.ContentValues;
+import android.content.Context;
 import android.database.Cursor;
-import android.database.sqlite.*;
+import android.database.sqlite.SQLiteDatabase;
+import android.database.sqlite.SQLiteOpenHelper;
 import android.util.Base64;
+
 import org.json.JSONArray;
 import org.json.JSONObject;
 
-import javax.crypto.SecretKeyFactory;
-import javax.crypto.spec.PBEKeySpec;
 import java.security.MessageDigest;
 import java.security.SecureRandom;
+
+import javax.crypto.SecretKeyFactory;
+import javax.crypto.spec.PBEKeySpec;
 
 public class DbHelper extends SQLiteOpenHelper {
     public DbHelper(Context c){super(c,"diniz_iptv.db",null,1);}
@@ -21,11 +25,17 @@ public class DbHelper extends SQLiteOpenHelper {
     @Override public void onUpgrade(SQLiteDatabase db,int oldV,int newV){}
 
     public void createAccount(String username,String password,long expiresAt) throws Exception {
-        byte[] salt=new byte[16];new SecureRandom().nextBytes(salt);byte[] hash=hash(password.toCharArray(),salt);
-        ContentValues v=new ContentValues();v.put("username",username.trim());v.put("salt",Base64.encodeToString(salt,Base64.NO_WRAP));v.put("hash",Base64.encodeToString(hash,Base64.NO_WRAP));v.put("expiresAt",expiresAt);
+        PasswordData p = passwordData(password);
+        ContentValues v=new ContentValues();v.put("username",username.trim());v.put("salt",p.salt);v.put("hash",p.hash);v.put("expiresAt",expiresAt);
         getWritableDatabase().insertOrThrow("accounts",null,v);
     }
+    public void updateAccountExpiry(long id,long expiresAt){ContentValues v=new ContentValues();v.put("expiresAt",expiresAt);getWritableDatabase().update("accounts",v,"id=?",new String[]{String.valueOf(id)});}
+    public void updateAccountPassword(long id,String password) throws Exception {PasswordData p=passwordData(password);ContentValues v=new ContentValues();v.put("salt",p.salt);v.put("hash",p.hash);getWritableDatabase().update("accounts",v,"id=?",new String[]{String.valueOf(id)});}
+
+    private static class PasswordData { String salt,hash; }
+    private PasswordData passwordData(String password) throws Exception {byte[] salt=new byte[16];new SecureRandom().nextBytes(salt);byte[] hash=hash(password.toCharArray(),salt);PasswordData p=new PasswordData();p.salt=Base64.encodeToString(salt,Base64.NO_WRAP);p.hash=Base64.encodeToString(hash,Base64.NO_WRAP);return p;}
     private byte[] hash(char[] password,byte[] salt) throws Exception {PBEKeySpec spec=new PBEKeySpec(password,salt,120000,256);return SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256").generateSecret(spec).getEncoded();}
+
     public long authenticate(String user,String pass) throws Exception {
         try(Cursor c=getReadableDatabase().rawQuery("SELECT salt,hash,expiresAt FROM accounts WHERE username=?",new String[]{user})){
             if(!c.moveToFirst())return -1;long exp=c.getLong(2);if(System.currentTimeMillis()>exp)return -2;
@@ -37,6 +47,7 @@ public class DbHelper extends SQLiteOpenHelper {
     public void deleteAccount(long id){getWritableDatabase().delete("accounts","id=?",new String[]{String.valueOf(id)});}
 
     public long addContent(ContentValues v){return getWritableDatabase().insertOrThrow("content",null,v);}
+    public int updateContent(long id, ContentValues v){return getWritableDatabase().update("content",v,"id=?",new String[]{String.valueOf(id)});}
     public void deleteContent(long id){getWritableDatabase().delete("content","id=?",new String[]{String.valueOf(id)});}
     public JSONArray listContent() throws Exception {
         JSONArray a=new JSONArray();String[] cols={"id","type","title","episodeTitle","year","description","posterUrl","genres","streamUrl","season","episode"};
