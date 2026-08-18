@@ -1,0 +1,45 @@
+name: Build Windows PC Apps
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'pc/**'
+      - '.github/workflows/build-windows.yml'
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Publish Player
+        shell: pwsh
+        run: dotnet publish pc/DinizIPTV.Player/DinizIPTV.Player.csproj -c Release -r win-x64 --self-contained true -o out/Player
+
+      - name: Publish Admin
+        shell: pwsh
+        run: dotnet publish pc/DinizIPTV.Admin/DinizIPTV.Admin.csproj -c Release -r win-x64 --self-contained true -o out/Admin
+
+      - name: Package
+        shell: pwsh
+        run: |
+          Compress-Archive -Path out/Player/* -DestinationPath out/Diniz-IPTV-Player-PC.zip -Force
+          Compress-Archive -Path out/Admin/* -DestinationPath out/Diniz-IPTV-Admin-PC.zip -Force
+          New-Item -ItemType Directory -Force -Path release | Out-Null
+          Copy-Item out/Diniz-IPTV-Player-PC.zip release/
+          Copy-Item out/Diniz-IPTV-Admin-PC.zip release/
+
+      - name: Upload Windows apps
+        uses: actions/upload-artifact@v4
+        with:
+          name: Diniz-IPTV-Windows-PC
+          path: release/*
+          if-no-files-found: error
