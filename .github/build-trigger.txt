@@ -1,1 +1,2 @@
 Build Diniz IPTV APKs
+Synchronize workflow run
