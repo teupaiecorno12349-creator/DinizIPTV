@@ -8,6 +8,13 @@ on:
       - "battery-tool/settings.gradle"
       - "battery-tool/build.gradle"
       - ".github/workflows/build-super-battery-saver-v2.yml"
+  pull_request:
+    branches: ["main"]
+    paths:
+      - "battery-tool/batterysaver/**"
+      - "battery-tool/settings.gradle"
+      - "battery-tool/build.gradle"
+      - ".github/workflows/build-super-battery-saver-v2.yml"
   workflow_dispatch:
 
 jobs:
