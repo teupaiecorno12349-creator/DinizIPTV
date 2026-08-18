@@ -8,6 +8,12 @@ on:
     paths:
       - 'battery-tool/**'
       - '.github/workflows/build-battery-health.yml'
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'battery-tool/**'
+      - '.github/workflows/build-battery-health.yml'
 
 jobs:
   build:
