@@ -20,8 +20,34 @@ import android.widget.FrameLayout;
 import android.widget.Toast;
 
 import java.net.URI;
+import java.util.Arrays;
+import java.util.HashSet;
+import java.util.Set;
 
 public class TeraBoxPlaybackActivity extends Activity {
+    private static final Set<String> HOSTS = new HashSet<>(Arrays.asList(
+            "terabox.com",
+            "www.terabox.com",
+            "1024terabox.com",
+            "www.1024terabox.com",
+            "terabox.app",
+            "www.terabox.app",
+            "teraboxshare.com",
+            "www.teraboxshare.com",
+            "teraboxlink.com",
+            "www.teraboxlink.com",
+            "terasharefile.com",
+            "www.terasharefile.com",
+            "terafileshare.com",
+            "www.terafileshare.com",
+            "terasharelink.com",
+            "www.terasharelink.com",
+            "teraboxapp.com",
+            "www.teraboxapp.com",
+            "1024tera.com",
+            "www.1024tera.com"
+    ));
+
     private FrameLayout root;
     private WebView webView;
     private View customView;
@@ -34,10 +60,14 @@ public class TeraBoxPlaybackActivity extends Activity {
             String h = u.getHost();
             if (h == null) return false;
             h = h.toLowerCase();
-            return h.equals("terabox.com") || h.endsWith(".terabox.com") ||
-                   h.equals("1024tera.com") || h.endsWith(".1024tera.com") ||
-                   h.equals("teraboxapp.com") || h.endsWith(".teraboxapp.com");
-        } catch (Exception e) { return false; }
+            if (HOSTS.contains(h)) return true;
+            for (String host : HOSTS) {
+                if (h.endsWith("." + host)) return true;
+            }
+            return false;
+        } catch (Exception e) {
+            return false;
+        }
     }
 
     @Override public void onCreate(Bundle b) {
@@ -72,36 +102,49 @@ public class TeraBoxPlaybackActivity extends Activity {
         s.setBuiltInZoomControls(false);
         s.setDisplayZoomControls(false);
         s.setSupportZoom(false);
-        s.setUserAgentString(s.getUserAgentString() + " DinizIPTV/1.2 TV");
-        if (Build.VERSION.SDK_INT >= 21) s.setMixedContentMode(WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE);
+        s.setUserAgentString(s.getUserAgentString() + " DinizIPTV/1.2.1 TV");
+        if (Build.VERSION.SDK_INT >= 21) {
+            s.setMixedContentMode(WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE);
+        }
 
         CookieManager.getInstance().setAcceptCookie(true);
-        if (Build.VERSION.SDK_INT >= 21) CookieManager.getInstance().setAcceptThirdPartyCookies(webView, true);
+        if (Build.VERSION.SDK_INT >= 21) {
+            CookieManager.getInstance().setAcceptThirdPartyCookies(webView, true);
+        }
 
         webView.setWebViewClient(new WebViewClient() {
             @Override public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
                 String next = request.getUrl().toString();
-                if (supports(next) || next.startsWith("https://") || next.startsWith("http://")) {
+                if (next.startsWith("https://") || next.startsWith("http://")) {
                     view.loadUrl(next);
                     return true;
                 }
                 return false;
             }
+
             @Override public void onReceivedError(WebView view, WebResourceRequest request, WebResourceError error) {
-                if (request.isForMainFrame()) Toast.makeText(TeraBoxPlaybackActivity.this, "Não foi possível carregar o TeraBox.", Toast.LENGTH_LONG).show();
+                if (request.isForMainFrame()) {
+                    Toast.makeText(TeraBoxPlaybackActivity.this, "Não foi possível carregar o TeraBox.", Toast.LENGTH_LONG).show();
+                }
             }
         });
 
         webView.setWebChromeClient(new WebChromeClient() {
             @Override public void onShowCustomView(View view, CustomViewCallback callback) {
-                if (customView != null) { callback.onCustomViewHidden(); return; }
+                if (customView != null) {
+                    callback.onCustomViewHidden();
+                    return;
+                }
                 customView = view;
                 customCallback = callback;
                 webView.setVisibility(View.GONE);
                 root.addView(view, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
                 immersive();
             }
-            @Override public void onHideCustomView() { hideCustomView(); }
+
+            @Override public void onHideCustomView() {
+                hideCustomView();
+            }
         });
 
         webView.loadUrl(url);
@@ -128,19 +171,40 @@ public class TeraBoxPlaybackActivity extends Activity {
             }
         } else {
             getWindow().getDecorView().setSystemUiVisibility(
-                    View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY | View.SYSTEM_UI_FLAG_FULLSCREEN |
-                    View.SYSTEM_UI_FLAG_HIDE_NAVIGATION | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN |
-                    View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION | View.SYSTEM_UI_FLAG_LAYOUT_STABLE);
+                    View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY |
+                    View.SYSTEM_UI_FLAG_FULLSCREEN |
+                    View.SYSTEM_UI_FLAG_HIDE_NAVIGATION |
+                    View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN |
+                    View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION |
+                    View.SYSTEM_UI_FLAG_LAYOUT_STABLE);
         }
     }
 
-    @Override public void onWindowFocusChanged(boolean hasFocus) { super.onWindowFocusChanged(hasFocus); if (hasFocus) immersive(); }
-    @Override protected void onResume() { super.onResume(); if (webView != null) webView.onResume(); immersive(); }
-    @Override protected void onPause() { if (webView != null) webView.onPause(); super.onPause(); }
+    @Override public void onWindowFocusChanged(boolean hasFocus) {
+        super.onWindowFocusChanged(hasFocus);
+        if (hasFocus) immersive();
+    }
+
+    @Override protected void onResume() {
+        super.onResume();
+        if (webView != null) webView.onResume();
+        immersive();
+    }
+
+    @Override protected void onPause() {
+        if (webView != null) webView.onPause();
+        super.onPause();
+    }
 
     @Override public void onBackPressed() {
-        if (customView != null) { hideCustomView(); return; }
-        if (webView != null && webView.canGoBack()) { webView.goBack(); return; }
+        if (customView != null) {
+            hideCustomView();
+            return;
+        }
+        if (webView != null && webView.canGoBack()) {
+            webView.goBack();
+            return;
+        }
         super.onBackPressed();
     }
 
