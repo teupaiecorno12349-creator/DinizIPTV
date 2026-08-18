@@ -46,5 +46,11 @@ public class DetailActivity extends Activity {
         setContentView(page);
     }
     private Button button(String s){Button b=new Button(this);b.setText(s);b.setTextColor(Color.WHITE);b.setTextSize(16);b.setFocusable(true);b.setBackground(bg(Color.rgb(124,77,255),10));b.setPadding(dp(18),0,dp(18),0);return b;}
-    private void play(ContentItem x){Class<?> target=OkRuPlaybackActivity.supports(x.streamUrl)?OkRuPlaybackActivity.class:PlaybackActivity.class;Intent i=new Intent(this,target);i.putExtra("url",x.streamUrl);i.putExtra("title",x.title);startActivity(i);}
+    private void play(ContentItem x){
+        Class<?> target;
+        if(TeraBoxPlaybackActivity.supports(x.streamUrl)) target=TeraBoxPlaybackActivity.class;
+        else if(OkRuPlaybackActivity.supports(x.streamUrl)) target=OkRuPlaybackActivity.class;
+        else target=PlaybackActivity.class;
+        Intent i=new Intent(this,target);i.putExtra("url",x.streamUrl);i.putExtra("title",x.title);startActivity(i);
+    }
 }
