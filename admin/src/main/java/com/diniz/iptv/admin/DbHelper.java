@@ -21,6 +21,7 @@ public class DbHelper extends SQLiteOpenHelper {
     @Override public void onCreate(SQLiteDatabase db){
         db.execSQL("CREATE TABLE accounts(id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT UNIQUE NOT NULL, salt TEXT NOT NULL, hash TEXT NOT NULL, expiresAt INTEGER NOT NULL)");
         db.execSQL("CREATE TABLE content(id INTEGER PRIMARY KEY AUTOINCREMENT, type TEXT NOT NULL, title TEXT NOT NULL, episodeTitle TEXT, year TEXT, description TEXT, posterUrl TEXT, genres TEXT, streamUrl TEXT NOT NULL, season INTEGER DEFAULT 0, episode INTEGER DEFAULT 0)");
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_content_stream ON content(streamUrl)");
     }
     @Override public void onUpgrade(SQLiteDatabase db,int oldV,int newV){}
 
@@ -49,6 +50,22 @@ public class DbHelper extends SQLiteOpenHelper {
     public long addContent(ContentValues v){return getWritableDatabase().insertOrThrow("content",null,v);}
     public int updateContent(long id, ContentValues v){return getWritableDatabase().update("content",v,"id=?",new String[]{String.valueOf(id)});}
     public void deleteContent(long id){getWritableDatabase().delete("content","id=?",new String[]{String.valueOf(id)});}
+
+    public boolean hasStreamUrl(String streamUrl){
+        try(Cursor c=getReadableDatabase().rawQuery("SELECT 1 FROM content WHERE streamUrl=? LIMIT 1",new String[]{streamUrl})){
+            return c.moveToFirst();
+        }
+    }
+
+    public long addTeraBoxContent(String type,String title,String episodeTitle,String year,String description,String posterUrl,String genres,String path,int season,int episode){
+        String streamUrl="terabox:"+path;
+        if(hasStreamUrl(streamUrl))return -1;
+        ContentValues v=new ContentValues();
+        v.put("type",type);v.put("title",title);v.put("episodeTitle",episodeTitle);v.put("year",year);v.put("description",description);
+        v.put("posterUrl",posterUrl);v.put("genres",genres);v.put("streamUrl",streamUrl);v.put("season",season);v.put("episode",episode);
+        return addContent(v);
+    }
+
     public JSONArray listContent() throws Exception {
         JSONArray a=new JSONArray();String[] cols={"id","type","title","episodeTitle","year","description","posterUrl","genres","streamUrl","season","episode"};
         try(Cursor c=getReadableDatabase().query("content",cols,null,null,null,null,"type,title,season,episode")){
