@@ -75,7 +75,7 @@ public final class MainActivity extends Activity implements OrsayServer.Listener
         try {
             testWidgetFile = OrsayTestWidget.ensure(getCacheDir());
         } catch (Exception e) {
-            tvStatus = null;
+            tvStatus.setText("Falha ao criar o jogo de teste: " + e.getMessage());
         }
         refreshUsbStatus();
         refreshIp();
@@ -217,7 +217,9 @@ public final class MainActivity extends Activity implements OrsayServer.Listener
 
     private void scanWidgets() {
         if (testWidgetFile == null) {
-            try { testWidgetFile = OrsayTestWidget.ensure(getCacheDir()); } catch (Exception e) {
+            try {
+                testWidgetFile = OrsayTestWidget.ensure(getCacheDir());
+            } catch (Exception e) {
                 tvStatus.setText("Não consegui criar o jogo de teste: " + e.getMessage());
                 return;
             }
@@ -231,10 +233,8 @@ public final class MainActivity extends Activity implements OrsayServer.Listener
             tvStatus.setText("Jogo de teste pronto. Você já pode iniciar o servidor.");
             return;
         }
-            toast("Escolha primeiro a pasta do pendrive.");
-            return;
-        }
-        tvStatus.setText("Procurando .zip/.wgt no pendrive…");
+
+        tvStatus.setText("Procurando .zip/.wgt no pendrive...");
         worker.execute(() -> {
             List<WidgetEntry> found = new ArrayList<>();
             try {
@@ -249,7 +249,7 @@ public final class MainActivity extends Activity implements OrsayServer.Listener
                     tvFolder.setText("Pasta selecionada: " + treeUri);
                     tvWidgets.setText("Widgets encontrados: " + (found.size() + 1) + " (inclui Jogo Orsay de teste)");
                     tvStatus.setText(found.isEmpty()
-                            ? "Nenhum .zip/.wgt encontrado."
+                            ? "Nenhum .zip/.wgt encontrado. O jogo de teste está pronto."
                             : "Pronto para publicar os widgets.");
                 });
             } catch (Exception e) {
