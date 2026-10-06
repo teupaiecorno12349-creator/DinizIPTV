@@ -1,0 +1,24 @@
+plugins {
+    id 'com.android.application'
+}
+
+android {
+    namespace 'com.diniz.orsayinstaller'
+    compileSdk 35
+
+    defaultConfig {
+        applicationId 'com.diniz.orsayinstaller'
+        minSdk 23
+        targetSdk 29
+        versionCode 1
+        versionName '1.0.0'
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            shrinkResources false
+        }
+    }
+}
+
