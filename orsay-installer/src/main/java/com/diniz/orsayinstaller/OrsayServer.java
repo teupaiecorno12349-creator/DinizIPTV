@@ -9,6 +9,7 @@ import java.io.BufferedOutputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.FileInputStream;
 import java.io.OutputStream;
 import java.net.ServerSocket;
 import java.net.Socket;
@@ -39,6 +40,7 @@ public final class OrsayServer {
     private Thread acceptThread;
     private int port;
     private String publicBaseUrl = "";
+    private long requestCount = 0;
 
     public OrsayServer(ContentResolver resolver, Listener listener) {
         this.resolver = resolver;
@@ -101,6 +103,8 @@ public final class OrsayServer {
             String[] parts = requestLine.split(" ");
             if (parts.length < 2) return;
             String method = parts[0].toUpperCase(Locale.US);
+            requestCount++;
+            log("TV -> " + requestLine);
             String rawPath = parts[1];
 
             // Consume request headers.
@@ -137,6 +141,7 @@ public final class OrsayServer {
                     out.flush();
                     return;
                 }
+                log("TV baixando widget: " + entry.name + " (" + entry.size + " bytes)");
                 writeHeaders(out, 200, "application/zip", entry.size);
                 if (!"HEAD".equals(method)) stream(entry, out);
                 out.flush();
@@ -159,11 +164,17 @@ public final class OrsayServer {
     }
 
     private void stream(WidgetEntry entry, OutputStream out) throws IOException {
-        try (InputStream raw = resolver.openInputStream(entry.uri)) {
-            if (raw == null) throw new IOException("Não foi possível abrir o arquivo " + entry.name);
+        InputStream raw;
+        if (entry.localFile != null) {
+            raw = new FileInputStream(entry.localFile);
+        } else {
+            raw = resolver.openInputStream(entry.uri);
+        }
+        if (raw == null) throw new IOException("Não foi possível abrir o arquivo " + entry.name);
+        try (InputStream in = raw) {
             byte[] buffer = new byte[32 * 1024];
             int n;
-            while ((n = raw.read(buffer)) != -1) out.write(buffer, 0, n);
+            while ((n = in.read(buffer)) != -1) out.write(buffer, 0, n);
         }
     }
 
