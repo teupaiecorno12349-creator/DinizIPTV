@@ -3,7 +3,10 @@ name: Build Android APKs
 on:
   workflow_dispatch:
   push:
-    branches: [ main, master ]
+    branches:
+      - main
+      - master
+      - 'build/**'
   pull_request:
     branches: [ main, master ]
 
@@ -16,6 +19,13 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Prepare uploaded Diniz Player v2 source
+        run: |
+          rm -rf player admin build.gradle settings.gradle gradle.properties README.md
+          mkdir -p /tmp/diniz-source
+          tar -xJf diniz-v2-source.tar.xz -C /tmp/diniz-source
+          cp -a /tmp/diniz-source/. .
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
@@ -34,12 +44,12 @@ jobs:
       - name: Collect APKs
         run: |
           mkdir -p apks
-          cp admin/build/outputs/apk/debug/admin-debug.apk apks/Diniz-IPTV-Admin.apk
-          cp player/build/outputs/apk/debug/player-debug.apk apks/Diniz-IPTV-Player.apk
+          cp admin/build/outputs/apk/debug/admin-debug.apk apks/Diniz-Config-Server.apk
+          cp player/build/outputs/apk/debug/player-debug.apk apks/Diniz-Player.apk
 
       - name: Upload APKs
         uses: actions/upload-artifact@v4
         with:
-          name: Diniz-IPTV-APKs
+          name: Diniz-Player-v2-APKs
           path: apks/*.apk
           if-no-files-found: error
