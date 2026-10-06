@@ -22,6 +22,8 @@ import android.widget.Spinner;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import java.io.File;
+
 import java.io.BufferedReader;
 import java.io.InputStream;
 import java.io.InputStreamReader;
@@ -60,6 +62,7 @@ public final class MainActivity extends Activity implements OrsayServer.Listener
     private OrsayServer server;
     private Uri treeUri;
     private boolean redirect80;
+    private File testWidgetFile;
     private SharedPreferences prefs;
 
     @Override protected void onCreate(Bundle state) {
@@ -69,6 +72,11 @@ public final class MainActivity extends Activity implements OrsayServer.Listener
             try { treeUri = Uri.parse(prefs.getString("treeUri", null)); } catch (Exception ignored) {}
         }
         buildUi();
+        try {
+            testWidgetFile = OrsayTestWidget.ensure(getCacheDir());
+        } catch (Exception e) {
+            tvStatus = null;
+        }
         refreshUsbStatus();
         refreshIp();
         if (treeUri != null) scanWidgets();
@@ -110,7 +118,11 @@ public final class MainActivity extends Activity implements OrsayServer.Listener
         portSpinner.setAdapter(ad);
         root.addView(portSpinner);
 
-        btnStart = button("3. Iniciar servidor");
+        Button btnTestGame = button("Teste rápido: publicar Jogo Orsay");
+        root.addView(btnTestGame);
+        btnTestGame.setOnClickListener(v -> startTestGame());
+
+        btnStart = button("4. Iniciar servidor");
         btnStop = button("Parar servidor");
         btnStop.setEnabled(false);
         root.addView(btnStart);
@@ -204,7 +216,21 @@ public final class MainActivity extends Activity implements OrsayServer.Listener
     }
 
     private void scanWidgets() {
+        if (testWidgetFile == null) {
+            try { testWidgetFile = OrsayTestWidget.ensure(getCacheDir()); } catch (Exception e) {
+                tvStatus.setText("Não consegui criar o jogo de teste: " + e.getMessage());
+                return;
+            }
+        }
         if (treeUri == null) {
+            synchronized (widgets) {
+                widgets.clear();
+                widgets.add(new WidgetEntry(testWidgetFile, testWidgetFile.getName()));
+            }
+            tvWidgets.setText("Widgets encontrados: 1 (inclui Jogo Orsay de teste)");
+            tvStatus.setText("Jogo de teste pronto. Você já pode iniciar o servidor.");
+            return;
+        }
             toast("Escolha primeiro a pasta do pendrive.");
             return;
         }
@@ -216,11 +242,12 @@ public final class MainActivity extends Activity implements OrsayServer.Listener
                 Collections.sort(found, (a,b) -> a.name.compareToIgnoreCase(b.name));
                 synchronized (widgets) {
                     widgets.clear();
+                    widgets.add(new WidgetEntry(testWidgetFile, testWidgetFile.getName()));
                     widgets.addAll(found);
                 }
                 runOnUiThread(() -> {
                     tvFolder.setText("Pasta selecionada: " + treeUri);
-                    tvWidgets.setText("Widgets encontrados: " + found.size());
+                    tvWidgets.setText("Widgets encontrados: " + (found.size() + 1) + " (inclui Jogo Orsay de teste)");
                     tvStatus.setText(found.isEmpty()
                             ? "Nenhum .zip/.wgt encontrado."
                             : "Pronto para publicar os widgets.");
@@ -269,6 +296,20 @@ public final class MainActivity extends Activity implements OrsayServer.Listener
     private boolean isWidget(String name) {
         String n = name == null ? "" : name.toLowerCase(Locale.US);
         return n.endsWith(".zip") || n.endsWith(".wgt");
+    }
+
+    private void startTestGame() {
+        if (testWidgetFile == null) {
+            try { testWidgetFile = OrsayTestWidget.ensure(getCacheDir()); }
+            catch (Exception e) { toast("Erro criando o jogo: " + e.getMessage()); return; }
+        }
+        synchronized (widgets) {
+            widgets.clear();
+            widgets.add(new WidgetEntry(testWidgetFile, testWidgetFile.getName()));
+        }
+        tvWidgets.setText("Widgets encontrados: 1 (Jogo Orsay de teste)");
+        tvStatus.setText("Jogo de teste selecionado.");
+        startServer();
     }
 
     private void startServer() {
