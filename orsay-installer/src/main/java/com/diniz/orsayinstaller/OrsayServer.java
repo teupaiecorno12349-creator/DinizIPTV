@@ -188,7 +188,7 @@ public final class OrsayServer {
             x.append("<widget id=\"").append(xml(e.id())).append("\">");
             x.append("<title>").append(xml(e.name)).append("</title>");
             x.append("<compression type=\"zip\" size=\"").append(e.size).append("\"/>");
-            x.append("<description>Samsung Orsay - instalação local</description>");
+            x.append("<description/>");
             x.append("<download>").append(xml(publicBaseUrl + "/Widget/" + Uri.encode(e.name))).append("</download>");
             x.append("</widget>");
         }
