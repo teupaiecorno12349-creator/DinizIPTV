@@ -71,7 +71,6 @@ public final class OrsayServer {
         if (ss != null) {
             try { ss.close(); } catch (IOException ignored) {}
         }
-        clients.shutdownNow();
         if (listener != null) listener.onStopped();
     }
 
@@ -170,14 +169,14 @@ public final class OrsayServer {
 
     private String buildWidgetList() {
         StringBuilder x = new StringBuilder(512);
-        x.append("<?xml version="1.0" encoding="UTF-8"?>");
-        x.append("<rsp stat="ok"><list>");
+        x.append("<?xml version=\"1.0\" encoding=\"UTF-8\"?>");
+        x.append("<rsp stat=\"ok\"><list>");
         List<WidgetEntry> copy;
         synchronized (lock) { copy = new ArrayList<>(widgets); }
         for (WidgetEntry e : copy) {
-            x.append("<widget id="").append(xml(e.id())).append("">");
+            x.append("<widget id=\"").append(xml(e.id())).append("\">");
             x.append("<title>").append(xml(e.name)).append("</title>");
-            x.append("<compression type="zip" size="").append(e.size).append(""/>");
+            x.append("<compression type=\"zip\" size=\"").append(e.size).append("\"/>");
             x.append("<description>Samsung Orsay - instalação local</description>");
             x.append("<download>").append(xml(publicBaseUrl + "/Widget/" + Uri.encode(e.name))).append("</download>");
             x.append("</widget>");
@@ -190,10 +189,10 @@ public final class OrsayServer {
         List<WidgetEntry> copy;
         synchronized (lock) { copy = new ArrayList<>(widgets); }
         StringBuilder h = new StringBuilder();
-        h.append("<html><head><meta charset="utf-8"><title>Orsay Installer</title></head><body>");
+        h.append("<html><head><meta charset=\"utf-8\"><title>Orsay Installer</title></head><body>");
         h.append("<h2>Samsung Orsay Widget Installer</h2>");
         h.append("<p>Servidor: ").append(xml(publicBaseUrl)).append("</p>");
-        h.append("<p>widgetlist.xml: <a href="/widgetlist.xml">abrir</a></p><ul>");
+        h.append("<p>widgetlist.xml: <a href=\"/widgetlist.xml\">abrir</a></p><ul>");
         for (WidgetEntry e : copy) {
             h.append("<li>").append(xml(e.name)).append(" (").append(e.size).append(" bytes)</li>");
         }
@@ -206,7 +205,7 @@ public final class OrsayServer {
         return value.replace("&", "&amp;")
                 .replace("<", "&lt;")
                 .replace(">", "&gt;")
-                .replace(""", "&quot;")
+                .replace("\"", "&quot;")
                 .replace("'", "&apos;");
     }
 
