@@ -20,11 +20,13 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Prepare uploaded Diniz Player v2 source
+      - name: Reconstruct uploaded Diniz Player v2 source
         run: |
           rm -rf player admin build.gradle settings.gradle gradle.properties README.md
+          cat diniz-v2-source.part1 diniz-v2-source.part2 diniz-v2-source.part3 diniz-v2-source.part4 diniz-v2-source.part5 diniz-v2-source.part6 diniz-v2-source.part7 > /tmp/diniz-v2.b64
+          base64 -d /tmp/diniz-v2.b64 > /tmp/diniz-v2.tar.xz
           mkdir -p /tmp/diniz-source
-          tar -xJf diniz-v2-source.tar.xz -C /tmp/diniz-source
+          tar -xJf /tmp/diniz-v2.tar.xz -C /tmp/diniz-source
           cp -a /tmp/diniz-source/. .
 
       - name: Set up JDK 17
