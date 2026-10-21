@@ -1,0 +1,7 @@
+cmake_minimum_required(VERSION 3.25)
+project(classic_disaster C)
+add_executable(classic_disaster main.c)
+set_target_properties(classic_disaster PROPERTIES C_STANDARD 17 C_EXTENSIONS ON)
+target_compile_options(classic_disaster PRIVATE -Wall -Wextra)
+xsdk_add_shaders(classic_disaster world_vs.hlsl world_ps.hlsl)
+xsdk_add_xex(classic_disaster)
