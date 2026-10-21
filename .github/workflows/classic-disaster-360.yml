@@ -27,7 +27,7 @@ jobs:
             ~/xsdk-gcc-work
             ~/xsdk
             ~/glslang-xenon
-          key: xsdk-xenon-toolchain-2026-10-v2
+          key: xsdk-xenon-toolchain-2026-10-v3
       - name: Fetch XSDK
         run: |
           if [ ! -f "$HOME/xsdk/cmake/xsdk.cmake" ]; then
@@ -35,7 +35,7 @@ jobs:
           fi
       - name: Build PowerPC Xbox 360 toolchain
         run: |
-          PREFIX="$HOME/xsdk-gcc" WORK="$HOME/xsdk-gcc-work" JOBS=2 "$HOME/xsdk/tools/toolchain/build.sh"
+          PREFIX="$HOME/xsdk-gcc" WORK="$HOME/xsdk-gcc-work" JOBS=2 bash "$HOME/xsdk/tools/toolchain/build.sh"
       - name: Build HLSL/GLSL shader compiler
         run: |
           if [ ! -f "$HOME/glslang-xenon/CMakeLists.txt" ]; then
