@@ -21,11 +21,13 @@ import java.util.concurrent.Executors;
 public class MainActivity extends Activity {
     private static final int REQ_SETTINGS=410;
     private static final String ACCOUNT="xtream_account";
-    private final ExecutorService io=Executors.newSingleThreadExecutor();
+    private final ExecutorService io=Executors.newFixedThreadPool(3);
+    private final ExecutorService categoryIo=Executors.newSingleThreadExecutor();
     private SharedPreferences account;
     private LinearLayout root,categoryList,contentArea;
     private GridLayout grid;
-    private ScrollView contentScroll;
+    private ScrollView contentScroll,categoryScroll;
+    private final Map<String,Button> tabButtons=new LinkedHashMap<>();
     private static final int GRID_BATCH_SIZE=18;
     private List<ContentItem> displayedItems=Collections.emptyList();
     private int gridRenderVersion=0,categoryRenderVersion=0,renderedCount=0;
@@ -169,14 +171,14 @@ public class MainActivity extends Activity {
 
         View line=new View(this);line.setBackgroundColor(Color.rgb(38,48,64));root.addView(line,new LinearLayout.LayoutParams(-1,dp(1)));
         LinearLayout body=new LinearLayout(this);body.setOrientation(LinearLayout.HORIZONTAL);LinearLayout.LayoutParams bodylp=new LinearLayout.LayoutParams(-1,0,1);bodylp.setMargins(0,dp(10),0,0);root.addView(body,bodylp);
-        ScrollView categoryScroll=new ScrollView(this);categoryScroll.setFillViewport(true);categoryScroll.setBackground(rounded(Color.rgb(12,17,25),12));LinearLayout.LayoutParams clp=new LinearLayout.LayoutParams(dp(238),-1);clp.setMargins(0,0,dp(14),0);body.addView(categoryScroll,clp);
+        categoryScroll=new ScrollView(this);categoryScroll.setFillViewport(true);categoryScroll.setBackground(rounded(Color.rgb(12,17,25),12));LinearLayout.LayoutParams clp=new LinearLayout.LayoutParams(dp(238),-1);clp.setMargins(0,0,dp(14),0);body.addView(categoryScroll,clp);
         categoryList=new LinearLayout(this);categoryList.setOrientation(LinearLayout.VERTICAL);categoryList.setPadding(dp(10),dp(12),dp(10),dp(12));categoryScroll.addView(categoryList);
         contentArea=new LinearLayout(this);contentArea.setOrientation(LinearLayout.VERTICAL);body.addView(contentArea,new LinearLayout.LayoutParams(0,-1,1));
         LinearLayout titleRow=new LinearLayout(this);titleRow.setGravity(Gravity.CENTER_VERTICAL);contentArea.addView(titleRow,new LinearLayout.LayoutParams(-1,dp(42)));
         contentTitle=text("",23);contentTitle.setTypeface(Typeface.DEFAULT_BOLD);titleRow.addView(contentTitle,new LinearLayout.LayoutParams(0,-2,1));
         contentCount=text("",13);contentCount.setTextColor(muted);titleRow.addView(contentCount);
         contentScroll=new ScrollView(this);contentScroll.setFillViewport(false);contentScroll.setVerticalScrollBarEnabled(false);contentArea.addView(contentScroll,new LinearLayout.LayoutParams(-1,0,1));
-        grid=new GridLayout(this);grid.setColumnCount(gridColumns());grid.setUseDefaultMargins(false);contentScroll.addView(grid);
+        grid=new GridLayout(this);grid.setColumnCount(gridColumns());grid.setUseDefaultMargins(false);contentScroll.addView(grid,new ScrollView.LayoutParams(-1,-2));
         contentScroll.setOnScrollChangeListener((View v,int sx,int sy,int oldSx,int oldSy)->{
             if(contentScroll!=null&&grid!=null&&sy+contentScroll.getHeight()>=grid.getHeight()-dp(220))
                 appendGridBatch(gridRenderVersion);
@@ -218,15 +220,115 @@ public class MainActivity extends Activity {
         Button b=button(name,14);
         LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(dp(116),dp(46));
         lp.setMargins(dp(3),0,dp(3),0);header.addView(b,lp);
-        int tint="live".equals(type)?Color.rgb(14,82,88):("movie".equals(type)?Color.rgb(104,61,27):Color.rgb(73,43,119));
-        b.setOnClickListener(v->{
-            if(!currentTab.equals(type)){
-                currentTab=type;currentCategory="all";
-                currentQuery=searchField==null?"":searchField.getText().toString().trim();
-                renderGrid();renderCategories();updateFooter();
-            }
+        tabButtons.put(type,b);
+        b.setOnClickListener(v->selectTab(type));
+        b.setOnFocusChangeListener((view,hasFocus)->{
+            int normal=tabColor(type);
+            int color=hasFocus?accent:(currentTab.equals(type)?Color.rgb(36,55,88):normal);
+            view.setBackground(rounded(color,10));
+            view.animate().scaleX(hasFocus?1.025f:1f).scaleY(hasFocus?1.025f:1f).setDuration(110).start();
         });
-        focusStyle(b,currentTab.equals(type)?Color.rgb(36,55,88):tint,accent);
+    }
+
+    private int tabColor(String type){
+        return "live".equals(type)?Color.rgb(14,82,88):("movie".equals(type)?Color.rgb(104,61,27):Color.rgb(73,43,119));
+    }
+
+    private void updateTabStyles(){
+        for(Map.Entry<String,Button> entry:tabButtons.entrySet()){
+            String type=entry.getKey();Button b=entry.getValue();
+            b.setVisibility("none".equals(currentTab)?View.GONE:View.VISIBLE);
+            int color=b.hasFocus()?accent:(currentTab.equals(type)?Color.rgb(36,55,88):tabColor(type));
+            b.setBackground(rounded(color,10));
+        }
+    }
+
+    private void selectTab(String type){
+        if(type==null||!("live".equals(type)||"movie".equals(type)||"series".equals(type)))return;
+        currentTab=type;
+        currentCategory="all";
+        currentQuery=searchField==null?"":searchField.getText().toString().trim();
+        if(categoryScroll!=null)categoryScroll.setVisibility(View.VISIBLE);
+        if(grid!=null)grid.setColumnCount(gridColumns());
+        updateTabStyles();
+        updateFooter();
+        renderCategories();
+        renderGrid();
+    }
+
+    private void showSectionPicker(int generation){
+        if(grid==null||generation!=gridRenderVersion)return;
+        int channels,movies,series;
+        synchronized(CatalogStore.class){
+            channels=CatalogStore.CHANNELS.size();
+            movies=CatalogStore.MOVIES.size();
+            series=CatalogStore.SERIES.size();
+        }
+        grid.removeAllViews();
+        grid.setColumnCount(3);
+        String[] types={"live","movie","series"};
+        String[] icons={"📺","🎬","📚"};
+        String[] names={"CANAIS","FILMES","SÉRIES"};
+        String[] details={channels+" canais disponíveis",movies+" filmes disponíveis",series+" séries disponíveis"};
+        int[] tints={Color.rgb(14,82,88),Color.rgb(104,61,27),Color.rgb(73,43,119)};
+        for(int i=0;i<types.length;i++){
+            final String type=types[i];
+            LinearLayout tile=new LinearLayout(this);
+            tile.setOrientation(LinearLayout.VERTICAL);
+            tile.setGravity(Gravity.CENTER);
+            tile.setPadding(dp(18),dp(18),dp(18),dp(18));
+            tile.setFocusable(true);tile.setClickable(true);
+            tile.setBackground(rounded(tints[i],18));
+            LinearLayout.LayoutParams iconParams=new LinearLayout.LayoutParams(-1,dp(80));
+            TextView icon=text(icons[i],54);icon.setGravity(Gravity.CENTER);tile.addView(icon,iconParams);
+            TextView title=text(names[i],27);title.setTypeface(Typeface.DEFAULT_BOLD);title.setGravity(Gravity.CENTER);
+            LinearLayout.LayoutParams titleParams=new LinearLayout.LayoutParams(-1,dp(48));titleParams.setMargins(0,dp(6),0,0);tile.addView(title,titleParams);
+            TextView count=text(details[i],15);count.setTextColor(Color.rgb(225,232,245));count.setGravity(Gravity.CENTER);
+            LinearLayout.LayoutParams countParams=new LinearLayout.LayoutParams(-1,dp(42));countParams.setMargins(0,dp(4),0,dp(18));tile.addView(count,countParams);
+            Button refresh=button("↻  ATUALIZAR",15);
+            refresh.setBackground(rounded(Color.rgb(27,38,58),10));
+            LinearLayout.LayoutParams refreshParams=new LinearLayout.LayoutParams(-1,dp(54));
+            tile.addView(refresh,refreshParams);
+            refresh.setOnClickListener(v->refreshSection(type,refresh,count));
+            focusStyle(tile,tints[i],accent);
+            tile.setOnClickListener(v->selectTab(type));
+            GridLayout.LayoutParams tileParams=new GridLayout.LayoutParams();
+            tileParams.rowSpec=GridLayout.spec(0);
+            tileParams.columnSpec=GridLayout.spec(i,1,GridLayout.FILL,1f);
+            tileParams.width=0;
+            tileParams.height=dp(330);
+            tileParams.setMargins(dp(10),dp(12),dp(10),dp(12));
+            grid.addView(tile,tileParams);
+        }
+    }
+
+    private void refreshSection(String type,Button refresh,TextView countLabel){
+        String server=account.getString("server",""),user=account.getString("username",""),pass=account.getString("password","");
+        if(server.isEmpty()||user.isEmpty()||pass.isEmpty()){
+            Toast.makeText(this,"Entre com sua conta Xtream Codes.",Toast.LENGTH_LONG).show();return;
+        }
+        refresh.setEnabled(false);refresh.setText("ATUALIZANDO…");
+        io.execute(()->{
+            String message=null;
+            try{
+                CatalogSync.refreshTab(MainActivity.this,new XtreamClient(MainActivity.this,server,user,pass),type);
+            }catch(Exception error){
+                message="Não foi possível atualizar essa lista agora.";
+            }
+            final String resultMessage=message;
+            runOnUiThread(()->{
+                if(isFinishing()||isDestroyed())return;
+                refresh.setEnabled(true);refresh.setText("↻  ATUALIZAR");
+                int count;
+                synchronized(CatalogStore.class){count=CatalogStore.list(type).size();}
+                String noun="live".equals(type)?" canais":("movie".equals(type)?" filmes":" séries");
+                countLabel.setText(count+noun+" disponíveis");
+                if(type.equals(currentTab)){renderCategories();renderGrid();}
+                if("none".equals(currentTab))showSectionPicker(gridRenderVersion);
+                updateFooter();
+                Toast.makeText(MainActivity.this,resultMessage==null?"Lista atualizada.":resultMessage,Toast.LENGTH_SHORT).show();
+            });
+        });
     }
     private int gridColumns(){int w=getResources().getConfiguration().screenWidthDp;return Math.max(3,Math.min(6,(w-290)/205));}
 
@@ -239,10 +341,25 @@ public class MainActivity extends Activity {
 
     private void renderCategories(){
         if(categoryList==null)return;
-        if("none".equals(currentTab)){categoryList.removeAllViews();return;}
         final int generation=++categoryRenderVersion;
-        final String tab=currentTab,selected=currentCategory;
-        io.execute(()->{
+        final String tab=currentTab;
+        if("none".equals(tab)){
+            categoryList.removeAllViews();
+            return;
+        }
+        // Change the left panel immediately. Counts/categories arrive on a
+        // dedicated worker and can no longer wait behind movie-grid sorting.
+        int initialCount;
+        synchronized(CatalogStore.class){initialCount=CatalogStore.list(tab).size();}
+        categoryList.removeAllViews();
+        TextView library=text("BIBLIOTECA",11);library.setTextColor(muted);library.setTypeface(Typeface.DEFAULT_BOLD);
+        library.setPadding(dp(10),dp(3),0,dp(10));categoryList.addView(library);
+        addCategory("Todos","all",initialCount);
+        addCategory("★  Favoritos","favorites",0);
+        TextView loading=text("Atualizando contagens…",12);loading.setTextColor(muted);
+        loading.setPadding(dp(10),dp(10),0,dp(8));categoryList.addView(loading);
+
+        categoryIo.execute(()->{
             List<ContentItem> source;
             List<CatalogCategory> categories;
             synchronized(CatalogStore.class){
@@ -272,23 +389,20 @@ public class MainActivity extends Activity {
             rows.add(new CategoryRow("★  Favoritos","favorites",favoriteTotal,false));
             if(!"live".equals(tab)){
                 rows.add(new CategoryRow("✦  Lançamentos","new",newTotal,false));
-                for(Map.Entry<Integer,Integer> y:yearCounts.entrySet())
-                    rows.add(new CategoryRow(("series".equals(tab)?"Séries ":"Filmes ")+y.getKey(),"year:"+y.getKey(),y.getValue(),false));
+                for(Map.Entry<Integer,Integer> year:yearCounts.entrySet())
+                    rows.add(new CategoryRow(("series".equals(tab)?"Séries ":"Filmes ")+year.getKey(),"year:"+year.getKey(),year.getValue(),false));
             }
             rows.add(new CategoryRow("CATEGORIAS","",0,true));
             for(CatalogCategory category:categories)
                 rows.add(new CategoryRow(category.name,"cat:"+category.id,categoryCounts.getOrDefault(category.id,0),false));
             runOnUiThread(()->{
-                if(isFinishing()||isDestroyed()||generation!=categoryRenderVersion
-                        ||!tab.equals(currentTab)||!selected.equals(currentCategory)||categoryList==null)return;
+                if(isFinishing()||isDestroyed()||generation!=categoryRenderVersion||!tab.equals(currentTab)||categoryList==null)return;
                 categoryList.removeAllViews();
                 for(CategoryRow row:rows){
                     if(row.heading){
                         TextView heading=text(row.name,11);heading.setTextColor(muted);heading.setTypeface(Typeface.DEFAULT_BOLD);
                         heading.setPadding(dp(10),dp("BIBLIOTECA".equals(row.name)?3:15),0,dp(10));categoryList.addView(heading);
-                    }else{
-                        addCategory(row.name,row.key,row.count);
-                    }
+                    }else addCategory(row.name,row.key,row.count);
                 }
             });
         });
@@ -348,13 +462,16 @@ public class MainActivity extends Activity {
         final int generation=++gridRenderVersion;
         final String tab=currentTab,selected=currentCategory;
         if("none".equals(tab)){
+            if(categoryScroll!=null)categoryScroll.setVisibility(View.GONE);
             displayedItems=Collections.emptyList();renderedCount=0;appendingGridBatch=false;
-            contentTitle.setText("Escolha uma seção");
+            contentTitle.setText("O QUE VOCÊ QUER ASSISTIR?");
             contentCount.setText("");
-            showGridMessage("Selecione Canais, Filmes ou Séries acima para carregar essa lista.");
             if(contentScroll!=null)contentScroll.scrollTo(0,0);
+            showSectionPicker(generation);
             return;
         }
+        if(categoryScroll!=null)categoryScroll.setVisibility(View.VISIBLE);
+        grid.setColumnCount(gridColumns());
         final String query=currentQuery==null?"":currentQuery.trim().toLowerCase(Locale.ROOT);
         grid.removeAllViews();
         displayedItems=Collections.emptyList();
@@ -471,9 +588,10 @@ public class MainActivity extends Activity {
         if(refreshButton==null||footerHint==null)return;
         boolean selected=!"none".equals(currentTab);
         refreshButton.setEnabled(selected);
+        refreshButton.setVisibility(selected?View.VISIBLE:View.GONE);
         refreshButton.setAlpha(selected?1f:0.5f);
         String tabName="live".equals(currentTab)?"Canais":("movie".equals(currentTab)?"Filmes":("series".equals(currentTab)?"Séries":"nenhuma aba"));
-        footerHint.setText(selected?"Aba atual: "+tabName+" · Atualização manual apenas desta aba.":"Escolha Canais, Filmes ou Séries para abrir a biblioteca.");
+        footerHint.setText(selected?"Aba atual: "+tabName+" · Atualização manual apenas desta aba.":"Use os cartões grandes acima para escolher uma lista; cada um tem atualização própria.");
     }
 
     private void refreshCurrentTab(){
@@ -543,9 +661,13 @@ public class MainActivity extends Activity {
         }
     }
     @Override public void onBackPressed(){
-        if(!"all".equals(currentCategory)){currentCategory="all";renderCategories();renderGrid();}
+        if(!"all".equals(currentCategory)){currentCategory="all";updateCategorySelection();renderGrid();}
         else if(!currentQuery.isEmpty()){currentQuery="";if(searchField!=null)searchField.setText("");renderGrid();}
-        else super.onBackPressed();
+        else if(!"none".equals(currentTab)){
+            currentTab="none";currentCategory="all";currentQuery="";
+            if(searchField!=null)searchField.setText("");
+            updateTabStyles();updateFooter();renderCategories();renderGrid();
+        }else super.onBackPressed();
     }
     @Override protected void onDestroy(){if(loader!=null)loader.cancel();io.shutdownNow();super.onDestroy();}
 }
