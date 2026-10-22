@@ -137,7 +137,7 @@ public class MainActivity extends Activity {
                 else loadingBar.setIndeterminate(true);
                 if(message.contains("Validando")||message.contains("Baixando"))loadingBar.setIndeterminate(true);
             });}
-            @Override public void onComplete(){runOnUiThread(()->{if(isFinishing())return;loader=null;showHome();Toast.makeText(MainActivity.this,"Catálogo carregado: "+CatalogStore.CHANNELS.size()+" canais, "+CatalogStore.MOVIES.size()+" filmes e "+CatalogStore.SERIES.size()+" séries.",Toast.LENGTH_LONG).show();});}
+            @Override public void onComplete(){runOnUiThread(()->{if(isFinishing())return;loader=null;CatalogRefreshScheduler.onUserActivity(MainActivity.this);lastRenderedCatalogRefresh=getSharedPreferences("marcin_catalog_state",MODE_PRIVATE).getLong("last_successful_sync",0L);showHome();Toast.makeText(MainActivity.this,"Catálogo carregado: "+CatalogStore.CHANNELS.size()+" canais, "+CatalogStore.MOVIES.size()+" filmes e "+CatalogStore.SERIES.size()+" séries.",Toast.LENGTH_LONG).show();});}
             @Override public void onError(String message){runOnUiThread(()->{loader=null;if(!CatalogStore.CHANNELS.isEmpty()||!CatalogStore.MOVIES.isEmpty()||!CatalogStore.SERIES.isEmpty()){showHome();Toast.makeText(MainActivity.this,"Não foi possível atualizar: "+message,Toast.LENGTH_LONG).show();}else showLogin(message);});}
         });
         loader.start();
