@@ -1,4 +1,4 @@
-name: Build Classic Disaster Survival XEX (reuse xSDK cache)
+name: Build Classic Disaster Survival XEX (reuse xSDK cache) # rebuild after C warning cleanup
 
 on:
   push:
