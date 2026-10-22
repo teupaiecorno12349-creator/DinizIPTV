@@ -1,0 +1,160 @@
+name: Build Classic Disaster Survival XEX (reuse xSDK cache)
+
+on:
+  push:
+    branches: ["experiment/xenonps2-xex-bootstrap"]
+    paths:
+      - ".github/workflows/classic-disaster-360-cached-xsdk.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: classic-disaster-360-cached-xsdk-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-classic-disaster:
+    name: Build Classic Disaster Survival XEX
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - name: Checkout branch that contains the proven xSDK cache workflow
+        uses: actions/checkout@v4
+        with:
+          ref: experiment/xenonps2-xex-bootstrap
+
+      - name: Checkout Classic Disaster source
+        uses: actions/checkout@v4
+        with:
+          ref: build/classic-disaster-360
+          path: classic-disaster-src
+
+      - name: Install xSDK prerequisites
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y build-essential bison flex texinfo libgmp-dev libmpfr-dev libmpc-dev curl xz-utils patch python3 cmake ninja-build git
+
+      - name: Fetch the exact xSDK revision used by the successful build
+        env:
+          XSDK_SOURCE_SHA: 57b02f1e60667e37d22c3aa613d23d2486514ff8
+        run: |
+          set -euo pipefail
+          git clone --no-checkout https://github.com/xenosworks/xsdk.git "$RUNNER_TEMP/xsdk"
+          git -C "$RUNNER_TEMP/xsdk" fetch --depth 1 origin "$XSDK_SOURCE_SHA"
+          git -C "$RUNNER_TEMP/xsdk" checkout --detach "$XSDK_SOURCE_SHA"
+          git -C "$RUNNER_TEMP/xsdk" submodule update --init --recursive --depth 1
+          test "$(git -C "$RUNNER_TEMP/xsdk" rev-parse HEAD)" = "$XSDK_SOURCE_SHA"
+
+      - name: Restore the previously successful xSDK GCC and library cache
+        id: xsdk-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            ${{ runner.temp }}/xsdk-gcc
+            ${{ runner.temp }}/xsdk/build
+          key: xenonps2-build-Linux-57b02f1e60667e37d22c3aa613d23d2486514ff8-d2f00185cf5feaa449f6e15c1894fb232b2b6bcd-v1
+          restore-keys: |
+            xenonps2-build-Linux-
+
+      - name: Verify or build the xSDK PowerPC compiler
+        env:
+          XSDK_SOURCE_SHA: 57b02f1e60667e37d22c3aa613d23d2486514ff8
+        run: |
+          set -euo pipefail
+          PREFIX="$RUNNER_TEMP/xsdk-gcc"
+          WORK="$RUNNER_TEMP/xsdk-toolchain-work"
+          export PREFIX WORK
+          export JOBS="$(nproc)"
+          if [ ! -x "$PREFIX/bin/powerpc-xsdk-elf-gcc" ]; then
+            echo "Cached compiler missing; rebuilding the xSDK toolchain."
+            bash "$RUNNER_TEMP/xsdk/tools/toolchain/build.sh"
+          else
+            echo "Using cached xSDK compiler: $("$PREFIX/bin/powerpc-xsdk-elf-gcc" --version | head -n 1)"
+          fi
+          test -x "$PREFIX/bin/powerpc-xsdk-elf-gcc"
+
+          SDK_MARKER="$RUNNER_TEMP/xsdk/build/.xenonps2-sdk-sha"
+          if [ ! -s "$RUNNER_TEMP/xsdk/build/libxsdk.a" ] ||              [ ! -s "$RUNNER_TEMP/xsdk/build/host/libxsc.so" ] ||              [ ! -s "$SDK_MARKER" ] ||              [ "$(cat "$SDK_MARKER")" != "$XSDK_SOURCE_SHA" ]; then
+            echo "Building xSDK libraries for the pinned source revision."
+            rm -rf "$RUNNER_TEMP/xsdk/build"
+            make -C "$RUNNER_TEMP/xsdk" -j"$(nproc)" TOOLCHAIN="$PREFIX/bin/powerpc-xsdk-elf-" build/libxsdk.a build/host/libxsc.so
+            printf '%s\n' "$XSDK_SOURCE_SHA" > "$SDK_MARKER"
+          else
+            echo "Using cached xSDK libraries."
+          fi
+          test -s "$RUNNER_TEMP/xsdk/build/libxsdk.a"
+          test -s "$RUNNER_TEMP/xsdk/build/host/libxsc.so"
+
+      - name: Verify or build the cached Xenon shader compiler
+        env:
+          GLSLANG_SOURCE_SHA: d2f00185cf5feaa449f6e15c1894fb232b2b6bcd
+        run: |
+          set -euo pipefail
+          PREFIX="$RUNNER_TEMP/xsdk-gcc"
+          SHADER_COMPILER="$PREFIX/bin/glslang"
+          if [ ! -x "$SHADER_COMPILER" ]; then
+            echo "Cached glslang missing; building the Xenon shader compiler."
+            git clone --no-checkout https://github.com/xenosworks/glslang-xenon.git "$RUNNER_TEMP/glslang-xenon"
+            git -C "$RUNNER_TEMP/glslang-xenon" fetch --depth 1 origin "$GLSLANG_SOURCE_SHA"
+            git -C "$RUNNER_TEMP/glslang-xenon" checkout --detach "$GLSLANG_SOURCE_SHA"
+            (cd "$RUNNER_TEMP/glslang-xenon" && python3 update_glslang_sources.py)
+            cmake -S "$RUNNER_TEMP/glslang-xenon" -B "$RUNNER_TEMP/glslang-build" -G Ninja               -DCMAKE_BUILD_TYPE=Release -DENABLE_OPT=ON -DSPIRV_SKIP_EXECUTABLES=ON -DGLSLANG_TESTS=OFF
+            cmake --build "$RUNNER_TEMP/glslang-build" --parallel "$(nproc)"
+            install -D "$RUNNER_TEMP/glslang-build/StandAlone/glslang" "$SHADER_COMPILER"
+          else
+            echo "Using cached Xenon shader compiler."
+          fi
+          test -x "$SHADER_COMPILER"
+
+      - name: Save xSDK and shader cache when needed
+        if: success() && steps.xsdk-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            ${{ runner.temp }}/xsdk-gcc
+            ${{ runner.temp }}/xsdk/build
+          key: xenonps2-build-Linux-57b02f1e60667e37d22c3aa613d23d2486514ff8-d2f00185cf5feaa449f6e15c1894fb232b2b6bcd-v1
+
+      - name: Configure and compile Classic Disaster Survival
+        run: |
+          set -euo pipefail
+          cmake -S classic-disaster-src/ClassicDisaster360 -B "$RUNNER_TEMP/classic-disaster-build" -G Ninja             -DCMAKE_BUILD_TYPE=Release             -DCMAKE_TOOLCHAIN_FILE="$RUNNER_TEMP/xsdk/cmake/xsdk.cmake"             -DXSDK_TOOLCHAIN="$RUNNER_TEMP/xsdk-gcc"             -DXSDK_GLSLANG="$RUNNER_TEMP/xsdk-gcc/bin/glslang"
+          cmake --build "$RUNNER_TEMP/classic-disaster-build" --parallel "$(nproc)" --verbose
+          XEX="$RUNNER_TEMP/classic-disaster-build/classic_disaster.xex"
+          test -s "$XEX"
+          python3 - "$XEX" <<'PY'
+          import hashlib, pathlib, sys
+          p = pathlib.Path(sys.argv[1])
+          data = p.read_bytes()
+          if data[:4] != b"XEX2":
+              raise SystemExit(f"Invalid XEX signature: {data[:4]!r}")
+          print("FORMAT=XEX2")
+          print(f"SIZE={len(data)}")
+          print(f"SHA256={hashlib.sha256(data).hexdigest()}")
+          PY
+          mkdir -p classic-disaster-artifact
+          cp "$XEX" classic-disaster-artifact/ClassicDisaster360.xex
+          cp classic-disaster-src/ClassicDisaster360/README.md classic-disaster-artifact/
+          sha256sum classic-disaster-artifact/ClassicDisaster360.xex > classic-disaster-artifact/SHA256SUMS.txt
+
+      - name: Upload Classic Disaster Survival XEX
+        uses: actions/upload-artifact@v4
+        with:
+          name: ClassicDisaster360-XEX
+          path: classic-disaster-artifact/*
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload build diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ClassicDisaster360-Build-Logs
+          path: |
+            ${{ runner.temp }}/classic-disaster-build
+            ${{ runner.temp }}/xsdk-toolchain-work
+          if-no-files-found: ignore
+          retention-days: 7
