@@ -94,9 +94,12 @@ public class PlaybackActivity extends Activity {
         else if("2160".equals(resolution))track.setMaxVideoSize(3840,2160);
         selector.setParameters(track.build());
 
-        OkHttpDataSource.Factory http=new OkHttpDataSource.Factory(NetworkStack.client(this))
-                .setUserAgent("MarcinIPTV/1.0 (Android TV)")
-                .setConnectTimeoutMs(15000).setReadTimeoutMs(35000);
+        okhttp3.OkHttpClient streamingClient=NetworkStack.client(this).newBuilder()
+                .connectTimeout(java.time.Duration.ofSeconds(15))
+                .readTimeout(java.time.Duration.ofSeconds(35))
+                .build();
+        OkHttpDataSource.Factory http=new OkHttpDataSource.Factory(streamingClient)
+                .setUserAgent("MarcinIPTV/1.0 (Android TV)");
         DefaultMediaSourceFactory sourceFactory=new DefaultMediaSourceFactory(http);
         player=new ExoPlayer.Builder(this).setLoadControl(load).setTrackSelector(selector).setMediaSourceFactory(sourceFactory).build();
         player.setRepeatMode(Player.REPEAT_MODE_OFF);
