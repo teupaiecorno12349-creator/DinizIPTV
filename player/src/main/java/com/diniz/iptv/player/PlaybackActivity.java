@@ -21,6 +21,7 @@ import android.widget.ProgressBar;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import androidx.media3.common.C;
 import androidx.media3.common.MediaItem;
 import androidx.media3.common.MediaMetadata;
 import androidx.media3.common.MimeTypes;
@@ -282,7 +283,7 @@ public class PlaybackActivity extends Activity {
         if(player==null||timeText==null)return;
         long position=Math.max(0,player.getCurrentPosition());
         long duration=player.getDuration();
-        if(duration<0||duration==Player.TIME_UNSET){
+        if(duration<0||duration==C.TIME_UNSET){
             timeText.setText(formatTime(position)+" / --:--  •  Tempo restante --:--");
             timeBar.setProgress(0);
         }else{
@@ -377,7 +378,7 @@ public class PlaybackActivity extends Activity {
         if(event.getAction()==KeyEvent.ACTION_UP&&(key==KeyEvent.KEYCODE_DPAD_LEFT||key==KeyEvent.KEYCODE_DPAD_RIGHT)&&player!=null){
             long offset=key==KeyEvent.KEYCODE_DPAD_RIGHT?10000L:-10000L;
             long duration=player.getDuration();long position=Math.max(0,player.getCurrentPosition()+offset);
-            if(duration>=0&&duration!=Player.TIME_UNSET)position=Math.min(duration,position);
+            if(duration>=0&&duration!=C.TIME_UNSET)position=Math.min(duration,position);
             player.seekTo(position);
             showOverlay();
             if(player.isPlaying())scheduleHideOverlay();
