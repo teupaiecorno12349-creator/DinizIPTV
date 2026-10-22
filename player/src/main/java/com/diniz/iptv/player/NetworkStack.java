@@ -42,9 +42,9 @@ public final class NetworkStack {
         if (client != null && requested.equals(mode)) return client;
         mode = requested;
         OkHttpClient.Builder builder = new OkHttpClient.Builder()
-                .connectTimeout(java.time.Duration.ofSeconds(12))
-                .readTimeout(java.time.Duration.ofSeconds(25))
-                .writeTimeout(java.time.Duration.ofSeconds(20))
+                .connectTimeout(java.time.Duration.ofSeconds(7))
+                .readTimeout(java.time.Duration.ofSeconds(12))
+                .writeTimeout(java.time.Duration.ofSeconds(12))
                 .followRedirects(true)
                 .followSslRedirects(true);
         if (!"system".equals(mode)) {
