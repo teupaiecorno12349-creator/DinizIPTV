@@ -25,17 +25,13 @@ public final class CatalogLoader {
     }
     private void load(){
         try{
-            CatalogStore.clear();
             progress(0,6,"Validando acesso Xtream Codes…");
             api.login();
             progress(1,6,"Baixando categorias e canais…");
             List<CatalogCategory> liveCats=api.categories("live");
             List<CatalogCategory> movieCats=api.categories("movie");
             List<CatalogCategory> seriesCats=api.categories("series");
-            CatalogStore.CATEGORIES.put("live",liveCats);
-            CatalogStore.CATEGORIES.put("movie",movieCats);
-            CatalogStore.CATEGORIES.put("series",seriesCats);
-
+            // Keep the previous on-device catalog intact until the complete lists have downloaded.
             progress(2,6,"Baixando lista completa de canais…");
             List<ContentItem> live=api.streams("live");
             List<ContentItem> movies;
@@ -46,9 +42,15 @@ public final class CatalogLoader {
             series=api.streams("series");
             applyCategoryNames(live,liveCats);applyCategoryNames(movies,movieCats);applyCategoryNames(series,seriesCats);
             synchronized(CatalogStore.class){
+                CatalogStore.CHANNELS.clear();CatalogStore.MOVIES.clear();CatalogStore.SERIES.clear();
                 CatalogStore.CHANNELS.addAll(live);
                 CatalogStore.MOVIES.addAll(movies);
                 CatalogStore.SERIES.addAll(series);
+                CatalogStore.CATEGORIES.clear();
+                CatalogStore.CATEGORIES.put("live",liveCats);
+                CatalogStore.CATEGORIES.put("movie",movieCats);
+                CatalogStore.CATEGORIES.put("series",seriesCats);
+                synchronized(CatalogStore.EPISODES){CatalogStore.EPISODES.clear();}
             }
             if(cancelled)return;
 
