@@ -101,9 +101,9 @@ jobs:
           DEST="$RUNNER_TEMP/glslang-16.5.0"
           mkdir -p "$DEST"
           tar -xzf "$ARCHIVE" -C "$DEST"
-          GLB="$(find "$DEST" -type f -perm -u+x \\( -name glslangValidator -o -name glslang \\) | head -1)"
+          GLB="$(find "$DEST" -type f -perm -u+x | grep -E '/(glslangValidator|glslang)$' | head -1)"
           test -n "$GLB"
-          LIBDIR="$(find "$DEST" -type d \\( -name lib -o -name lib64 \\) | head -1 || true)"
+          LIBDIR="$(find "$DEST" -type d | grep -E '/(lib|lib64)$' | head -1 || true)"
           install -d "$HOME/xsdk-gcc/bin"
           {
             echo '#!/usr/bin/env bash'
