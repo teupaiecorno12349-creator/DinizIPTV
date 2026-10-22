@@ -129,6 +129,12 @@ public class DetailActivity extends Activity {
     private Button button(String title){
         Button b=new Button(this);b.setText(title);b.setTextColor(Color.WHITE);b.setTextSize(15);b.setAllCaps(false);b.setFocusable(true);b.setBackground(bg(Color.rgb(48,93,184),10));return b;
     }
+
+    private Button button(String title,int size){
+        Button b=button(title);
+        b.setTextSize(size);
+        return b;
+    }
     private void build(ContentItem item,List<ContentItem> episodes){
         ScrollView outer=new ScrollView(this);outer.setFillViewport(true);outer.setBackgroundColor(Color.rgb(7,10,16));
         LinearLayout page=new LinearLayout(this);page.setOrientation(LinearLayout.HORIZONTAL);page.setPadding(dp(30),dp(24),dp(30),dp(24));outer.addView(page);
