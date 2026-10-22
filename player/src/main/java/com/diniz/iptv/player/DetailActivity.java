@@ -142,8 +142,10 @@ public class DetailActivity extends Activity {
         TextView synopsis=text(synopsisText,17);synopsis.setTextColor(Color.rgb(220,225,234));synopsis.setLineSpacing(0,1.12f);info.addView(synopsis,new LinearLayout.LayoutParams(-1,-2));
         if("series".equals(item.type)){
             LinearLayout buttons=new LinearLayout(this);buttons.setOrientation(LinearLayout.HORIZONTAL);LinearLayout.LayoutParams bp=new LinearLayout.LayoutParams(-1,dp(58));bp.setMargins(0,dp(15),0,dp(9));info.addView(buttons,bp);
-            Button next=button(episodes.isEmpty()?(detailLoading?"CONSULTANDO EPISÓDIOS…":"EPISÓDIOS INDISPONÍVEIS"):"▶  PRÓXIMO EPISÓDIO");next.setEnabled(!episodes.isEmpty());buttons.addView(next,new LinearLayout.LayoutParams(dp(255),-1));
-            if(!episodes.isEmpty())next.setOnClickListener(v->playEpisodeList(item,episodes,nextIndex(item,episodes)));
+            boolean canResume=hasSavedSeriesProgress(item,episodes);
+            Button next=button(episodes.isEmpty()?(detailLoading?"CONSULTANDO EPISÓDIOS…":"EPISÓDIOS INDISPONÍVEIS"):(canResume?"▶  CONTINUAR ASSISTINDO":"▶  ASSISTIR SÉRIE"),15);
+            next.setEnabled(!episodes.isEmpty());buttons.addView(next,new LinearLayout.LayoutParams(dp(300),-1));
+            if(!episodes.isEmpty())next.setOnClickListener(v->playEpisodeList(item,episodes,seriesStartIndex(item,episodes)));
             TextView heading=text("TEMPORADAS E EPISÓDIOS  ("+episodes.size()+")",17);heading.setTypeface(Typeface.DEFAULT_BOLD);heading.setPadding(0,dp(13),0,dp(9));info.addView(heading);
             if(episodes.isEmpty()){
                 String episodeMessage=detailLoading?"Buscando temporadas e episódios desta série no servidor…":
@@ -171,8 +173,16 @@ public class DetailActivity extends Activity {
                 }
             }
         }else{
-            Button play=button("▶  ASSISTIR AGORA");LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(dp(265),dp(58));p.setMargins(0,dp(20),0,0);info.addView(play,p);
-            play.setOnClickListener(v->{Intent intent=new Intent(this,PlaybackActivity.class);intent.putExtra("url",item.streamUrl);intent.putExtra("title",item.displayTitle());intent.putExtra("content_type",item.type);startActivity(intent);});
+            android.content.SharedPreferences playbackPrefs=getSharedPreferences("marcin_playback_progress",MODE_PRIVATE);
+            long savedPos=playbackPrefs.getLong("pos_movie_"+item.id,0L);
+            String playLabel=savedPos>0?"▶  CONTINUAR  ·  "+formatSavedTime(savedPos):"▶  ASSISTIR AGORA";
+            Button play=button(playLabel,15);LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(dp(300),dp(58));p.setMargins(0,dp(20),0,0);info.addView(play,p);
+            play.setOnClickListener(v->{
+                Intent intent=new Intent(this,PlaybackActivity.class);
+                intent.putExtra("url",item.streamUrl);intent.putExtra("title",item.displayTitle());
+                intent.putExtra("content_type",item.type);intent.putExtra("resume_key","movie_"+item.id);
+                startActivity(intent);
+            });
         }
         setContentView(outer);
     }
@@ -187,12 +197,36 @@ public class DetailActivity extends Activity {
         if(x.duration!=null&&!x.duration.isEmpty()&&p.size()<2)p.add(x.duration);
         return android.text.TextUtils.join("  •  ",p);
     }
-    private int nextIndex(ContentItem series,List<ContentItem> eps){
-        long last=progress.getLong("last_episode_"+series.id,-1L);
-        if(last<0)return 0;
-        for(int i=0;i<eps.size();i++)if(eps.get(i).id==last)return Math.min(eps.size()-1,i+1);
-        return 0;
+    private String formatSavedTime(long millis){
+        long total=Math.max(0,millis/1000L);
+        long h=total/3600L,m=(total%3600L)/60L;
+        return h>0?String.format(Locale.ROOT,"%02d:%02d:%02d",h,m,total%60L)
+                :String.format(Locale.ROOT,"%02d:%02d",m,total%60L);
     }
+    private boolean hasSavedSeriesProgress(ContentItem series,List<ContentItem> episodes){
+        if(episodes.isEmpty())return false;
+        int index=findLastEpisodeIndex(series,episodes);
+        if(index<0)return false;
+        ContentItem ep=episodes.get(index);
+        return getSharedPreferences("marcin_playback_progress",MODE_PRIVATE)
+                .getLong("pos_series_"+series.id+"_episode_"+ep.id,0L)>0L;
+    }
+    private int findLastEpisodeIndex(ContentItem series,List<ContentItem> episodes){
+        long last=progress.getLong("last_episode_"+series.id,-1L);
+        for(int i=0;i<episodes.size();i++)if(episodes.get(i).id==last)return i;
+        return -1;
+    }
+    private int seriesStartIndex(ContentItem series,List<ContentItem> episodes){
+        if(episodes.isEmpty())return 0;
+        int lastIndex=findLastEpisodeIndex(series,episodes);
+        if(lastIndex<0)return 0;
+        ContentItem ep=episodes.get(lastIndex);
+        long saved=getSharedPreferences("marcin_playback_progress",MODE_PRIVATE)
+                .getLong("pos_series_"+series.id+"_episode_"+ep.id,0L);
+        if(saved>0L)return lastIndex;
+        return Math.min(episodes.size()-1,lastIndex+1);
+    }
+    private int nextIndex(ContentItem series,List<ContentItem> eps){return seriesStartIndex(series,eps);}
     private void playEpisodeList(ContentItem series,List<ContentItem> episodes,int start){
         ArrayList<String> urls=new ArrayList<>(),titles=new ArrayList<>();
         long[] ids=new long[episodes.size()-start],seriesIds=new long[episodes.size()-start];
