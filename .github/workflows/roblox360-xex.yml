@@ -5,7 +5,7 @@ on:
     branches:
       - robloxclassic360-build
     paths:
-      - 'build-input/roblox360_src.tar.gz.b64'
+      - 'build-input/chunks/**'
       - '.github/workflows/roblox360-xex.yml'
   workflow_dispatch:
 
@@ -90,8 +90,15 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p projetos/roblox_classic360
-          base64 --decode build-input/roblox360_src.tar.gz.b64 | \
-            tar -xz -C projetos/roblox_classic360
+          cat build-input/chunks/00.b64 build-input/chunks/01.b64 \
+            build-input/chunks/02.b64 build-input/chunks/03.b64 build-input/chunks/04.b64 \
+            > "$RUNNER_TEMP/roblox360-src.tar.gz.b64"
+          test "$(wc -c < "$RUNNER_TEMP/roblox360-src.tar.gz.b64")" -eq 17868
+          base64 --decode "$RUNNER_TEMP/roblox360-src.tar.gz.b64" \
+            > "$RUNNER_TEMP/roblox360-src.tar.gz"
+          echo "4f1160c7f14ee36a4ca453844d9b8e97da9f2f6e7bb27767dfb83be40bf34fe1  $RUNNER_TEMP/roblox360-src.tar.gz" \
+            | sha256sum --check -
+          tar -xzf "$RUNNER_TEMP/roblox360-src.tar.gz" -C projetos/roblox_classic360
           test -f projetos/roblox_classic360/CMakeLists.txt
           find projetos/roblox_classic360 -maxdepth 3 -type f -print | sort
 
