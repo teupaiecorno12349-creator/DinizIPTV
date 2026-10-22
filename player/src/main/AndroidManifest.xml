@@ -3,16 +3,18 @@
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-feature android:name="android.software.leanback" android:required="false" />
     <uses-feature android:name="android.hardware.touchscreen" android:required="false" />
+    <uses-feature android:name="android.hardware.type.television" android:required="false" />
 
     <application
-        android:allowBackup="true"
+        android:allowBackup="false"
+        android:usesCleartextTraffic="true"
         android:icon="@drawable/ic_launcher"
         android:banner="@drawable/tv_banner"
-        android:label="Diniz IPTV"
-        android:theme="@style/AppTheme"
-        android:usesCleartextTraffic="true">
-        <activity android:name=".PlaybackActivity" android:screenOrientation="landscape" />
-        <activity android:name=".DetailActivity" android:screenOrientation="landscape" />
+        android:label="Marcin IPTV"
+        android:theme="@style/AppTheme">
+        <activity android:name=".PlaybackActivity" android:screenOrientation="landscape" android:exported="false" />
+        <activity android:name=".DetailActivity" android:screenOrientation="landscape" android:exported="false" />
+        <activity android:name=".SettingsActivity" android:screenOrientation="landscape" android:exported="false" />
         <activity android:name=".MainActivity" android:screenOrientation="landscape" android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
