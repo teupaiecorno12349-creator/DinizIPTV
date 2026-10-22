@@ -30,6 +30,17 @@ public final class CatalogStore {
             out.write(root.toString().getBytes(StandardCharsets.UTF_8));
         }
     }
+    public static synchronized void clearCache(Context c){
+        clear();
+        File f=new File(c.getFilesDir(),FILE);if(f.exists())f.delete();
+        File posters=new File(c.getCacheDir(),"posters");
+        deleteRecursively(posters);
+    }
+    private static void deleteRecursively(File f){
+        if(f==null||!f.exists())return;
+        File[] children=f.listFiles();if(children!=null)for(File child:children)deleteRecursively(child);
+        f.delete();
+    }
     public static synchronized boolean load(Context c){
         File f=new File(c.getFilesDir(),FILE);if(!f.isFile())return false;
         try(GZIPInputStream in=new GZIPInputStream(new FileInputStream(f));InputStreamReader reader=new InputStreamReader(in,StandardCharsets.UTF_8)){
