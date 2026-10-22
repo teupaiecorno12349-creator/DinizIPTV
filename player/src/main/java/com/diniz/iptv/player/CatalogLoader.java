@@ -104,6 +104,7 @@ public final class CatalogLoader {
 
             progress(7,7,"Salvando catálogo local…");
             CatalogStore.save(context);
+            CatalogSync.markRefreshed(context,"all");
             if(cancelled)return;
 
             if(listener!=null)listener.onComplete();
