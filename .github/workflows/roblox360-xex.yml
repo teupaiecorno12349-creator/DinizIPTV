@@ -13,7 +13,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: robloxclassic360-xex
+  group: robloxclassic360-xex-fastpath
   cancel-in-progress: false
 
 env:
@@ -27,11 +27,20 @@ jobs:
       - name: Checkout do projeto
         uses: actions/checkout@v4
 
-      - name: Instalar dependências
+      - name: Verificar ferramentas pré-instaladas
+        shell: bash
         run: |
-          sudo apt-get update -q
-          sudo apt-get install -y -q build-essential bison flex texinfo libgmp-dev libmpfr-dev libmpc-dev \
-            curl xz-utils patch python3 cmake ninja-build git
+          set -euo pipefail
+          missing=0
+          for tool in cmake ninja make git python3 gh; do
+            command -v "$tool" >/dev/null 2>&1 || { echo "Falta ferramenta: $tool"; missing=1; }
+          done
+          if [ "$missing" -ne 0 ]; then
+            sudo apt-get update -q
+            sudo apt-get install -y -q build-essential cmake ninja-build git python3 curl xz-utils patch
+          else
+            echo "Ferramentas de build já estão instaladas; evitando apt-get update."
+          fi
 
       - name: Obter XSDK fixado
         run: |
@@ -68,7 +77,10 @@ jobs:
           }
 
           if ! have_ok; then
-            echo "Cache ausente/incompatível; construindo o toolchain pelo script oficial do xsdk."
+            echo "Cache ausente/incompatível; instalando dependências para construir o toolchain."
+            sudo apt-get update -q
+            sudo apt-get install -y -q build-essential bison flex texinfo libgmp-dev libmpfr-dev libmpc-dev curl xz-utils patch python3 cmake ninja-build git
+            echo "Construindo o toolchain pelo script oficial do xsdk."
             rm -rf "$TC" "$HOME/xsdk-gcc-work"
             cd "$HOME/xsdk"
             PREFIX="$TC" WORK="$HOME/xsdk-gcc-work" JOBS="$(nproc)" bash tools/toolchain/build.sh
@@ -126,7 +138,7 @@ jobs:
           find build-output -maxdepth 1 -type f -iname '*.xex' -printf '%f %s bytes\n' | tee -a build-output/build.log
           if ! find build-output -maxdepth 1 -type f -iname '*.xex' | grep -q .; then
             echo "FALHA: a compilação não produziu um .xex." | tee -a build-output/build.log
-            exit "${status:-1}"
+            if [ "$status" -eq 0 ]; then exit 1; else exit "$status"; fi
           fi
           exit "$status"
 
