@@ -12,8 +12,16 @@ import android.widget.*;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 public class DetailActivity extends Activity {
+    private final ExecutorService metadataExecutor=Executors.newSingleThreadExecutor();
+    private volatile boolean detailLoading;
+    private String detailError;
+    private ContentItem activeItem;
+    private String activeType="movie";
+
     private int dp(int v){return Math.round(v*getResources().getDisplayMetrics().density);}
     private TextView text(String s,int sp){TextView t=new TextView(this);t.setText(s==null?"":s);t.setTextSize(sp);t.setTextColor(Color.WHITE);return t;}
     private GradientDrawable bg(int c,int r){GradientDrawable g=new GradientDrawable();g.setColor(c);g.setCornerRadius(dp(r));return g;}
@@ -25,11 +33,75 @@ public class DetailActivity extends Activity {
         progress=getSharedPreferences("marcin_progress",MODE_PRIVATE);
         long id=getIntent().getLongExtra("id",-1);String type=getIntent().getStringExtra("type");
         if(type==null)type="movie";
-        ContentItem item=find(type,id);
-        if(item==null){finish();return;}
-        List<ContentItem> episodes="series".equals(type)?CatalogStore.EPISODES.getOrDefault(item.id,new ArrayList<>()):new ArrayList<>();
-        build(item,episodes);
+        activeType=type;
+        activeItem=find(type,id);
+        if(activeItem==null){finish();return;}
+        detailLoading=shouldFetchDetails(type,id);
+        build(activeItem,currentEpisodes(activeItem));
+        if(detailLoading)fetchDetails(activeItem,type);
     }
+    private boolean shouldFetchDetails(String type,long id){
+        long checked=getSharedPreferences("marcin_metadata",MODE_PRIVATE)
+                .getLong("checked_"+type+"_"+id,0L);
+        // A detail response is cached for one day; opening the same title again is instant.
+        return checked==0L||System.currentTimeMillis()-checked>24L*60L*60L*1000L;
+    }
+
+    private List<ContentItem> currentEpisodes(ContentItem item){
+        if(item==null||!"series".equals(item.type))return new ArrayList<>();
+        synchronized(CatalogStore.EPISODES){
+            List<ContentItem> saved=CatalogStore.EPISODES.get(item.id);
+            return saved==null?new ArrayList<>():new ArrayList<>(saved);
+        }
+    }
+
+    private void fetchDetails(ContentItem item,String type){
+        android.content.SharedPreferences account=getSharedPreferences("xtream_account",MODE_PRIVATE);
+        String base=account.getString("server",""),user=account.getString("username",""),pass=account.getString("password","");
+        if(base.isEmpty()||user.isEmpty()||pass.isEmpty()){
+            detailLoading=false;
+            detailError="Entre novamente na conta Xtream Codes para consultar os detalhes.";
+            build(item,currentEpisodes(item));
+            return;
+        }
+        metadataExecutor.execute(()->{
+            try{
+                XtreamClient client=new XtreamClient(getApplicationContext(),base,user,pass);
+                List<ContentItem> episodes=null;
+                if("series".equals(type)){
+                    episodes=client.enrichSeries(item);
+                    synchronized(CatalogStore.EPISODES){
+                        CatalogStore.EPISODES.put(item.id,new ArrayList<>(episodes));
+                    }
+                }else if("movie".equals(type)){
+                    client.enrichMovie(item);
+                }
+                getSharedPreferences("marcin_metadata",MODE_PRIVATE).edit()
+                        .putLong("checked_"+type+"_"+item.id,System.currentTimeMillis()).apply();
+                CatalogStore.save(getApplicationContext());
+                List<ContentItem> resultEpisodes=currentEpisodes(item);
+                runOnUiThread(()->{
+                    if(isFinishing()||isDestroyed())return;
+                    detailLoading=false;
+                    detailError=null;
+                    build(item,resultEpisodes);
+                });
+            }catch(Exception e){
+                runOnUiThread(()->{
+                    if(isFinishing()||isDestroyed())return;
+                    detailLoading=false;
+                    detailError="Não foi possível consultar os detalhes agora. Tente abrir este título novamente mais tarde.";
+                    build(item,currentEpisodes(item));
+                });
+            }
+        });
+    }
+
+    @Override protected void onDestroy(){
+        metadataExecutor.shutdownNow();
+        super.onDestroy();
+    }
+
     private ContentItem find(String type,long id){
         for(ContentItem x:CatalogStore.list(type))if(x.id==id)return x;
         return null;
@@ -50,13 +122,20 @@ public class DetailActivity extends Activity {
         if(item.director!=null&&!item.director.isEmpty())addInfo(info,"Direção",item.director);
         if(item.duration!=null&&!item.duration.isEmpty())addInfo(info,"Duração",item.duration);
         if(item.cast!=null&&!item.cast.isEmpty())addInfo(info,"Elenco",item.cast);
-        TextView synopsis=text(item.description==null||item.description.trim().isEmpty()?"Sinopse não fornecida pelo servidor.":item.description,17);synopsis.setTextColor(Color.rgb(220,225,234));synopsis.setLineSpacing(0,1.12f);info.addView(synopsis,new LinearLayout.LayoutParams(-1,-2));
+        String synopsisText=item.description==null||item.description.trim().isEmpty()
+                ?(detailLoading?"Consultando sinopse e informações do título…":(detailError!=null?detailError:"Sinopse não fornecida pelo servidor."))
+                :item.description;
+        TextView synopsis=text(synopsisText,17);synopsis.setTextColor(Color.rgb(220,225,234));synopsis.setLineSpacing(0,1.12f);info.addView(synopsis,new LinearLayout.LayoutParams(-1,-2));
         if("series".equals(item.type)){
             LinearLayout buttons=new LinearLayout(this);buttons.setOrientation(LinearLayout.HORIZONTAL);LinearLayout.LayoutParams bp=new LinearLayout.LayoutParams(-1,dp(58));bp.setMargins(0,dp(15),0,dp(9));info.addView(buttons,bp);
-            Button next=button(episodes.isEmpty()?"EPISÓDIOS INDISPONÍVEIS":"▶  PRÓXIMO EPISÓDIO");next.setEnabled(!episodes.isEmpty());buttons.addView(next,new LinearLayout.LayoutParams(dp(255),-1));
+            Button next=button(episodes.isEmpty()?(detailLoading?"CONSULTANDO EPISÓDIOS…":"EPISÓDIOS INDISPONÍVEIS"):"▶  PRÓXIMO EPISÓDIO");next.setEnabled(!episodes.isEmpty());buttons.addView(next,new LinearLayout.LayoutParams(dp(255),-1));
             if(!episodes.isEmpty())next.setOnClickListener(v->playEpisodeList(item,episodes,nextIndex(item,episodes)));
             TextView heading=text("TEMPORADAS E EPISÓDIOS  ("+episodes.size()+")",17);heading.setTypeface(Typeface.DEFAULT_BOLD);heading.setPadding(0,dp(13),0,dp(9));info.addView(heading);
-            if(episodes.isEmpty()){TextView none=text("O servidor não forneceu episódios para esta série.",14);none.setTextColor(Color.LTGRAY);info.addView(none);}
+            if(episodes.isEmpty()){
+                String episodeMessage=detailLoading?"Buscando temporadas e episódios desta série no servidor…":
+                        (detailError!=null?detailError:"O servidor não forneceu episódios para esta série.");
+                TextView none=text(episodeMessage,14);none.setTextColor(Color.LTGRAY);info.addView(none);
+            }
             else{
                 LinearLayout list=new LinearLayout(this);list.setOrientation(LinearLayout.VERTICAL);info.addView(list);
                 int lastSeason=-1;
