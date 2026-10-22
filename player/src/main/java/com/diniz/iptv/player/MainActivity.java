@@ -79,7 +79,7 @@ public class MainActivity extends Activity {
         Button settings=button("⚙",24);brandRow.addView(settings,new LinearLayout.LayoutParams(dp(64),dp(58)));
         settings.setOnClickListener(v->openSettings());
         TextView headline=text("Seu entretenimento, organizado.",22);headline.setGravity(Gravity.CENTER);page.addView(headline,new LinearLayout.LayoutParams(-1,dp(48)));
-        TextView hint=text("Conecte-se com os dados da sua conta Xtream Codes.",15);hint.setTextColor(muted);hint.setGravity(Gravity.CENTER);page.addView(hint,new LinearLayout.LayoutParams(-1,dp(35)));
+        TextView hint=text("O catálogo abre primeiro; sinopses e episódios são consultados ao selecionar cada título.",15);hint.setTextColor(muted);hint.setGravity(Gravity.CENTER);page.addView(hint,new LinearLayout.LayoutParams(-1,dp(35)));
         LinearLayout form=new LinearLayout(this);form.setOrientation(LinearLayout.VERTICAL);form.setPadding(dp(26),dp(20),dp(26),dp(22));form.setBackground(rounded(panel,16));
         LinearLayout.LayoutParams fp=new LinearLayout.LayoutParams(Math.min(dp(690),getResources().getDisplayMetrics().widthPixels-dp(150)),-2);fp.setMargins(0,dp(15),0,0);page.addView(form,fp);
         serverField=field(form,"URL do servidor (ex.: http://servidor:porta)",InputType.TYPE_CLASS_TEXT|InputType.TYPE_TEXT_VARIATION_URI);
