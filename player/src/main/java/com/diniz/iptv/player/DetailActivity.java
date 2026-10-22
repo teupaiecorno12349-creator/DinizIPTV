@@ -43,8 +43,21 @@ public class DetailActivity extends Activity {
     private boolean shouldFetchDetails(String type,long id){
         long checked=getSharedPreferences("marcin_metadata",MODE_PRIVATE)
                 .getLong("checked_"+type+"_"+id,0L);
-        // A detail response is cached for one day; opening the same title again is instant.
-        return checked==0L||System.currentTimeMillis()-checked>24L*60L*60L*1000L;
+        long age=System.currentTimeMillis()-checked;
+        // Trust metadata already supplied in the bulk catalogue; do not make a
+        // second round-trip just to repeat a synopsis the provider already sent.
+        boolean hasSynopsis=activeItem!=null&&activeItem.description!=null
+                &&!activeItem.description.trim().isEmpty();
+        boolean hasEpisodes=false;
+        if("series".equals(type)){
+            synchronized(CatalogStore.EPISODES){
+                List<ContentItem> saved=CatalogStore.EPISODES.get(id);
+                hasEpisodes=saved!=null&&!saved.isEmpty();
+            }
+        }
+        if(hasSynopsis&&(!"series".equals(type)||hasEpisodes))return false;
+        // Successful details/episode responses stay cached for seven days.
+        return checked==0L||age>7L*24L*60L*60L*1000L;
     }
 
     private List<ContentItem> currentEpisodes(ContentItem item){
