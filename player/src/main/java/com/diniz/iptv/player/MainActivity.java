@@ -17,12 +17,14 @@ import android.widget.*;
 import java.util.*;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 
 public class MainActivity extends Activity {
     private static final int REQ_SETTINGS=410;
     private static final String ACCOUNT="xtream_account";
     private final ExecutorService io=Executors.newFixedThreadPool(3);
     private final ExecutorService categoryIo=Executors.newSingleThreadExecutor();
+    private Future<?> categoryTask;
     private SharedPreferences account;
     private LinearLayout root,categoryList,contentArea;
     private GridLayout grid;
@@ -344,6 +346,9 @@ public class MainActivity extends Activity {
         if(categoryList==null)return;
         final int generation=++categoryRenderVersion;
         final String tab=currentTab;
+        // A category scan can be large. Do not leave the current tab waiting
+        // behind a scan that belongs to a tab the user has already left.
+        if(categoryTask!=null)categoryTask.cancel(true);
         if("none".equals(tab)){
             categoryList.removeAllViews();
             return;
@@ -369,7 +374,7 @@ public class MainActivity extends Activity {
         TextView loading=text("Contagens atualizando…",11);loading.setTextColor(muted);
         loading.setPadding(dp(10),dp(10),0,dp(8));categoryList.addView(loading);
 
-        categoryIo.execute(()->{
+        categoryTask=categoryIo.submit(()->{
             List<ContentItem> source;
             List<CatalogCategory> categories;
             synchronized(CatalogStore.class){
@@ -383,6 +388,7 @@ public class MainActivity extends Activity {
             int favoriteTotal=0,newTotal=0;
             int calendarYear=java.util.Calendar.getInstance().get(java.util.Calendar.YEAR);
             for(ContentItem item:source){
+                if(Thread.currentThread().isInterrupted())return;
                 if(favorites.getBoolean(item.key(),false))favoriteTotal++;
                 if(isNew(item))newTotal++;
                 if(item.categoryId!=null&&!item.categoryId.isEmpty())
@@ -393,6 +399,7 @@ public class MainActivity extends Activity {
             }
             if(yearCounts.isEmpty()&&!"live".equals(tab))
                 for(int y=calendarYear;y>=calendarYear-5;y--)yearCounts.put(y,0);
+            if(Thread.currentThread().isInterrupted())return;
             List<CategoryRow> rows=new ArrayList<>();
             rows.add(new CategoryRow("BIBLIOTECA","",0,true));
             rows.add(new CategoryRow("Todos","all",source.size(),false));
@@ -679,5 +686,5 @@ public class MainActivity extends Activity {
             updateTabStyles();updateFooter();renderCategories();renderGrid();
         }else super.onBackPressed();
     }
-    @Override protected void onDestroy(){if(loader!=null)loader.cancel();io.shutdownNow();super.onDestroy();}
+    @Override protected void onDestroy(){if(loader!=null)loader.cancel();if(categoryTask!=null)categoryTask.cancel(true);io.shutdownNow();categoryIo.shutdownNow();super.onDestroy();}
 }
