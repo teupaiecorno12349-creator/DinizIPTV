@@ -177,8 +177,21 @@ int main(void){
    yaw+=stick(p->thumb_rx)*0.045f;if(yaw>PI)yaw-=2*PI;if(yaw<-PI)yaw+=2*PI;
    if(alive){float speed=(p->left_trigger>120)?0.115f:0.075f,fx=stick(p->thumb_ly),sx=stick(p->thumb_lx);
     float nx=px+(sinf(yaw)*fx+cosf(yaw)*sx)*speed,nz=pz+(cosf(yaw)*fx-sinf(yaw)*sx)*speed;
-    if(!blocked(nx,pz))px=clampf(nx,-6.1f,6.1f);if(!blocked(px,nz))pz=clampf(nz,-6.1f,6.1f);
-    if((p->buttons&INPUT_GAMEPAD_A)&&py<=0.001f)jv=0.17f;py+=jv;jv-=0.008f;if(py<0){py=0;jv=0;}
+    if (!blocked(nx, pz)) {
+        px = clampf(nx, -6.1f, 6.1f);
+    }
+    if (!blocked(px, nz)) {
+        pz = clampf(nz, -6.1f, 6.1f);
+    }
+    if ((p->buttons & INPUT_GAMEPAD_A) && py <= 0.001f) {
+        jv = 0.17f;
+    }
+    py += jv;
+    jv -= 0.008f;
+    if (py < 0.0f) {
+        py = 0.0f;
+        jv = 0.0f;
+    }
    }else if(dead_timer){dead_timer--;if(!dead_timer){alive=true;px=0;py=0;pz=-4.4f;jv=0;}}
    if(rf>=PREP_FRAMES&&alive){uint32_t d=round%DISASTER_COUNT,active=rf-PREP_FRAMES;if(hit_by(d,active,round,px,pz)){alive=false;dead_timer=120;died=true;}}
    game_frame++;
