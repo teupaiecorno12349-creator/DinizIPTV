@@ -91,4 +91,9 @@ public class SettingsActivity extends Activity {
         if(g.getChildCount()>0)((RadioButton)g.getChildAt(0)).setChecked(true);
     }
     private Button button(String s){Button b=new Button(this);b.setText(s);b.setTextSize(14);b.setTextColor(Color.WHITE);b.setAllCaps(false);b.setFocusable(true);b.setBackground(bg(Color.rgb(20,31,48),9));b.setOnFocusChangeListener((v,f)->v.setBackground(bg(f?Color.rgb(79,130,255):Color.rgb(20,31,48),9)));return b;}
+    @Override public void onUserInteraction(){
+        super.onUserInteraction();
+        CatalogRefreshScheduler.onUserActivity(this);
+    }
+
 }
