@@ -209,6 +209,7 @@ public class MainActivity extends Activity {
         footer.addView(refreshButton,refreshParams);
         refreshButton.setOnClickListener(v->refreshCurrentTab());
         root.addView(footer,new LinearLayout.LayoutParams(-1,dp(50)));
+        updateTabStyles();
         updateFooter();
         renderGrid();renderCategories();setContentView(root);
         lastRenderedCatalogRefresh=getSharedPreferences("marcin_catalog_state",MODE_PRIVATE).getLong("last_successful_sync",lastRenderedCatalogRefresh);
@@ -347,16 +348,25 @@ public class MainActivity extends Activity {
             categoryList.removeAllViews();
             return;
         }
-        // Change the left panel immediately. Counts/categories arrive on a
-        // dedicated worker and can no longer wait behind movie-grid sorting.
         int initialCount;
-        synchronized(CatalogStore.class){initialCount=CatalogStore.list(tab).size();}
+        List<CatalogCategory> cachedCategories;
+        synchronized(CatalogStore.class){
+            initialCount=CatalogStore.list(tab).size();
+            List<CatalogCategory> saved=CatalogStore.CATEGORIES.get(tab);
+            cachedCategories=saved==null?new ArrayList<>():new ArrayList<>(saved);
+        }
+        // Immediately replace the old tab's sidebar with the new tab's names.
+        // Counts/years are recalculated on the dedicated worker afterwards.
         categoryList.removeAllViews();
         TextView library=text("BIBLIOTECA",11);library.setTextColor(muted);library.setTypeface(Typeface.DEFAULT_BOLD);
         library.setPadding(dp(10),dp(3),0,dp(10));categoryList.addView(library);
         addCategory("Todos","all",initialCount);
         addCategory("★  Favoritos","favorites",0);
-        TextView loading=text("Atualizando contagens…",12);loading.setTextColor(muted);
+        if(!"live".equals(tab))addCategory("✦  Lançamentos","new",0);
+        TextView section=text("CATEGORIAS",11);section.setTextColor(muted);section.setTypeface(Typeface.DEFAULT_BOLD);
+        section.setPadding(dp(10),dp(15),0,dp(10));categoryList.addView(section);
+        for(CatalogCategory category:cachedCategories)addCategory(category.name,"cat:"+category.id,0);
+        TextView loading=text("Contagens atualizando…",11);loading.setTextColor(muted);
         loading.setPadding(dp(10),dp(10),0,dp(8));categoryList.addView(loading);
 
         categoryIo.execute(()->{
