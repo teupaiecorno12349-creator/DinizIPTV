@@ -1,0 +1,38 @@
+name: Fetch public Natural Disaster island template for port research
+
+on:
+  push:
+    branches: ["experiment/xenonps2-xex-bootstrap"]
+    paths: [".github/workflows/probe-nds-island-model.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  fetch-model:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Download public Roblox Creator Store island template
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifact
+          curl --fail --location --retry 3 --retry-delay 2 \
+            -A "Mozilla/5.0 (compatible; ClassicDisaster360/1.0)" \
+            "https://assetdelivery.roblox.com/v1/asset/?id=142407199" \
+            -o artifact/NaturalDisasterIslandTemplate.rbxm
+          test -s artifact/NaturalDisasterIslandTemplate.rbxm
+          echo "SIZE=$(stat -c '%s' artifact/NaturalDisasterIslandTemplate.rbxm)"
+          echo "SHA256=$(sha256sum artifact/NaturalDisasterIslandTemplate.rbxm | cut -d' ' -f1)"
+          file artifact/NaturalDisasterIslandTemplate.rbxm
+          xxd -l 64 artifact/NaturalDisasterIslandTemplate.rbxm
+
+      - name: Upload retrieved model for inspection
+        uses: actions/upload-artifact@v4
+        with:
+          name: NaturalDisasterIslandTemplate
+          path: artifact/NaturalDisasterIslandTemplate.rbxm
+          if-no-files-found: error
+          retention-days: 3
