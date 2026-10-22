@@ -13,7 +13,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: robloxclassic360-xex-fastpath2
+  group: robloxclassic360-xex-fastpath3
   cancel-in-progress: false
 
 env:
@@ -90,23 +90,30 @@ jobs:
           fi
           "$TC/bin/powerpc-xsdk-elf-gcc" --version | head -1
 
-      - name: Disponibilizar glslang para shaders GLSL
+      - name: Obter glslang Linux pré-compilado (GLSL)
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p "$HOME/xsdk-gcc/bin"
-          if command -v glslang >/dev/null 2>&1; then
-            GLSLANG="$(command -v glslang)"
-          elif command -v glslangValidator >/dev/null 2>&1; then
-            GLSLANG="$(command -v glslangValidator)"
-          else
-            sudo apt-get update -q
-            sudo apt-get install -y -q glslang-tools
-            GLSLANG="$(command -v glslangValidator)"
-          fi
-          # Este port usa apenas GLSL (.vert/.frag). Khronos glslang é suficiente;
-          # glslang-xenon só é necessário para shaders HLSL específicos do XSDK.
-          install -m 0755 "$GLSLANG" "$HOME/xsdk-gcc/bin/glslang"
+          ARCHIVE="$RUNNER_TEMP/glslang-16.5.0-linux-x86_64-release.tar.gz"
+          URL="https://github.com/KhronosGroup/glslang/releases/download/16.5.0/glslang-16.5.0-linux-x86_64-release.tar.gz"
+          curl --fail --location --retry 3 --retry-delay 2 "$URL" -o "$ARCHIVE"
+          echo "b9b1f96acb898a62251b171f7695efcecfc206a530299054071919b06820f657  $ARCHIVE" | sha256sum --check -
+          DEST="$RUNNER_TEMP/glslang-16.5.0"
+          mkdir -p "$DEST"
+          tar -xzf "$ARCHIVE" -C "$DEST"
+          GLB="$(find "$DEST" -type f -perm -u+x \\( -name glslangValidator -o -name glslang \\) | head -1)"
+          test -n "$GLB"
+          LIBDIR="$(find "$DEST" -type d \\( -name lib -o -name lib64 \\) | head -1 || true)"
+          install -d "$HOME/xsdk-gcc/bin"
+          {
+            echo '#!/usr/bin/env bash'
+            echo 'set -e'
+            if [ -n "$LIBDIR" ]; then
+              printf 'export LD_LIBRARY_PATH=%q:${LD_LIBRARY_PATH:-}\n' "$LIBDIR"
+            fi
+            printf 'exec %q "$@"\n' "$GLB"
+          } > "$HOME/xsdk-gcc/bin/glslang"
+          chmod 0755 "$HOME/xsdk-gcc/bin/glslang"
           "$HOME/xsdk-gcc/bin/glslang" --version | head -4
 
       - name: Construir bibliotecas do XSDK
