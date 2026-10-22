@@ -1,6 +1,7 @@
 package com.diniz.iptv.player;
 
 import android.app.Activity;
+import android.app.AlertDialog;
 import android.content.Intent;
 import android.graphics.Color;
 import android.graphics.Typeface;
@@ -151,31 +152,21 @@ public class DetailActivity extends Activity {
             Button next=button(episodes.isEmpty()?(detailLoading?"CONSULTANDO EPISÓDIOS…":"EPISÓDIOS INDISPONÍVEIS"):(canResume?"▶  CONTINUAR ASSISTINDO":"▶  ASSISTIR SÉRIE"),15);
             next.setEnabled(!episodes.isEmpty());buttons.addView(next,new LinearLayout.LayoutParams(dp(300),-1));
             if(!episodes.isEmpty())next.setOnClickListener(v->playEpisodeList(item,episodes,seriesStartIndex(item,episodes)));
+            List<Integer> availableSeasons=seasonNumbers(episodes);
             TextView heading=text("TEMPORADAS E EPISÓDIOS  ("+episodes.size()+")",17);heading.setTypeface(Typeface.DEFAULT_BOLD);heading.setPadding(0,dp(13),0,dp(9));info.addView(heading);
             if(episodes.isEmpty()){
                 String episodeMessage=detailLoading?"Buscando temporadas e episódios desta série no servidor…":
                         (detailError!=null?detailError:"O servidor não forneceu episódios para esta série.");
                 TextView none=text(episodeMessage,14);none.setTextColor(Color.LTGRAY);info.addView(none);
-            }
-            else{
-                LinearLayout list=new LinearLayout(this);list.setOrientation(LinearLayout.VERTICAL);info.addView(list);
-                int lastSeason=-1;
-                for(int i=0;i<episodes.size();i++){
-                    ContentItem ep=episodes.get(i);
-                    if(ep.season!=lastSeason){lastSeason=ep.season;TextView sh=text("TEMPORADA "+lastSeason,13);sh.setTextColor(Color.rgb(130,167,255));sh.setTypeface(Typeface.DEFAULT_BOLD);sh.setPadding(0,dp(12),0,dp(5));list.addView(sh);}
-                    Button eb=button(String.format(Locale.ROOT,"%02d  %s",ep.episode,ep.episodeTitle==null||ep.episodeTitle.isEmpty()?"Episódio "+ep.episode:ep.episodeTitle));
-                    eb.setGravity(Gravity.LEFT|Gravity.CENTER_VERTICAL);
-                    eb.setPadding(dp(16),0,dp(12),0);
-                    eb.setBackground(bg(Color.rgb(17,24,35),8));
-                    eb.setFocusable(true);
-                    eb.setFocusableInTouchMode(true);
-                    eb.setOnFocusChangeListener((focusedView,hasFocus)->{
-                        focusedView.setBackground(bg(hasFocus?Color.rgb(41,75,132):Color.rgb(17,24,35),8));
-                        focusedView.animate().scaleX(hasFocus?1.025f:1f).scaleY(hasFocus?1.025f:1f).setDuration(100).start();
-                    });
-                    LinearLayout.LayoutParams elp=new LinearLayout.LayoutParams(-1,dp(49));elp.setMargins(0,dp(3),0,dp(3));list.addView(eb,elp);
-                    final int ix=i;eb.setOnClickListener(v->playEpisodeList(item,episodes,ix));
-                }
+            }else{
+                Button chooseSeason=button("▤  ESCOLHER TEMPORADA  ·  "+availableSeasons.size(),15);
+                LinearLayout.LayoutParams seasonButtonParams=new LinearLayout.LayoutParams(dp(330),dp(54));
+                seasonButtonParams.setMargins(0,dp(4),0,dp(8));
+                info.addView(chooseSeason,seasonButtonParams);
+                chooseSeason.setOnClickListener(v->showSeasonPicker(item,episodes));
+                TextView help=text("Escolha uma temporada para ver todos os episódios dela.",13);
+                help.setTextColor(Color.rgb(160,172,191));
+                info.addView(help,new LinearLayout.LayoutParams(-1,-2));
             }
         }else{
             android.content.SharedPreferences playbackPrefs=getSharedPreferences("marcin_playback_progress",MODE_PRIVATE);
@@ -191,6 +182,83 @@ public class DetailActivity extends Activity {
         }
         setContentView(outer);
     }
+    private List<Integer> seasonNumbers(List<ContentItem> episodes){
+        java.util.TreeSet<Integer> values=new java.util.TreeSet<>();
+        for(ContentItem ep:episodes)values.add(ep.season);
+        return new ArrayList<>(values);
+    }
+
+    private void showSeasonPicker(ContentItem series,List<ContentItem> episodes){
+        List<Integer> seasons=seasonNumbers(episodes);
+        if(seasons.isEmpty())return;
+        String[] labels=new String[seasons.size()];
+        for(int i=0;i<seasons.size();i++){
+            int season=seasons.get(i),count=0;
+            for(ContentItem ep:episodes)if(ep.season==season)count++;
+            labels[i]="Temporada "+season+"  ·  "+count+(count==1?" episódio":" episódios");
+        }
+        new AlertDialog.Builder(this)
+                .setTitle("Escolha a temporada")
+                .setItems(labels,(dialog,which)->showEpisodesForSeason(series,episodes,seasons.get(which)))
+                .setNegativeButton("FECHAR",null)
+                .show();
+    }
+
+    private void showEpisodesForSeason(ContentItem series,List<ContentItem> allEpisodes,int season){
+        List<Integer> sourceIndices=new ArrayList<>();
+        List<ContentItem> seasonEpisodes=new ArrayList<>();
+        for(int i=0;i<allEpisodes.size();i++){
+            ContentItem ep=allEpisodes.get(i);
+            if(ep.season==season){seasonEpisodes.add(ep);sourceIndices.add(i);}
+        }
+        if(seasonEpisodes.isEmpty())return;
+
+        ScrollView scroll=new ScrollView(this);
+        scroll.setFillViewport(false);
+        scroll.setVerticalScrollBarEnabled(true);
+        LinearLayout list=new LinearLayout(this);
+        list.setOrientation(LinearLayout.VERTICAL);
+        list.setPadding(dp(12),dp(8),dp(12),dp(10));
+        scroll.addView(list,new ScrollView.LayoutParams(-1,-2));
+
+        AlertDialog dialog=new AlertDialog.Builder(this)
+                .setTitle("Temporada "+season+"  ·  "+seasonEpisodes.size()+" episódios")
+                .setView(scroll)
+                .setNegativeButton("FECHAR",null)
+                .create();
+
+        for(int i=0;i<seasonEpisodes.size();i++){
+            ContentItem ep=seasonEpisodes.get(i);
+            Button episodeButton=button(String.format(Locale.ROOT,"%02d  %s",ep.episode,
+                    ep.episodeTitle==null||ep.episodeTitle.isEmpty()?"Episódio "+ep.episode:ep.episodeTitle));
+            episodeButton.setGravity(Gravity.LEFT|Gravity.CENTER_VERTICAL);
+            episodeButton.setPadding(dp(16),0,dp(12),0);
+            episodeButton.setBackground(bg(Color.rgb(17,24,35),8));
+            episodeButton.setFocusable(true);
+            episodeButton.setFocusableInTouchMode(true);
+            episodeButton.setOnFocusChangeListener((focusedView,hasFocus)->{
+                focusedView.setBackground(bg(hasFocus?Color.rgb(41,75,132):Color.rgb(17,24,35),8));
+                focusedView.animate().scaleX(hasFocus?1.025f:1f).scaleY(hasFocus?1.025f:1f).setDuration(100).start();
+                if(hasFocus)scroll.post(()->scroll.smoothScrollTo(0,Math.max(0,focusedView.getTop()-dp(70))));
+            });
+            LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-1,dp(48));
+            lp.setMargins(0,dp(3),0,dp(3));
+            list.addView(episodeButton,lp);
+            final int sourceIndex=sourceIndices.get(i);
+            episodeButton.setOnClickListener(v->{dialog.dismiss();playEpisodeList(series,allEpisodes,sourceIndex);});
+        }
+
+        dialog.setOnShowListener(ignored->{
+            if(dialog.getWindow()!=null){
+                int width=Math.min(dp(760),getResources().getDisplayMetrics().widthPixels-dp(80));
+                int height=Math.min(dp(520),Math.round(getResources().getDisplayMetrics().heightPixels*0.78f));
+                dialog.getWindow().setLayout(width,height);
+            }
+            if(list.getChildCount()>0)list.getChildAt(0).requestFocus();
+        });
+        dialog.show();
+    }
+
     private void addInfo(LinearLayout parent,String label,String value){
         TextView t=text(label+": "+value,13);t.setTextColor(Color.rgb(165,177,196));t.setPadding(0,dp(2),0,dp(2));t.setMaxLines(2);parent.addView(t,new LinearLayout.LayoutParams(-1,-2));
     }

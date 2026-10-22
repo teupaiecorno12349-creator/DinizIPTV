@@ -454,6 +454,13 @@ public class MainActivity extends Activity {
         TextView meta=text(sub,11);meta.setTextColor(muted);meta.setMaxLines(1);meta.setEllipsize(android.text.TextUtils.TruncateAt.END);meta.setPadding(dp(3),dp(2),dp(3),0);outer.addView(meta,new LinearLayout.LayoutParams(-1,dp(21)));
         focusStyle(outer,panel,Color.rgb(41,63,101));
         outer.setOnClickListener(v->{if("live".equals(currentTab))playItem(x);else{Intent i=new Intent(this,DetailActivity.class);i.putExtra("id",x.id);i.putExtra("type",currentTab);startActivity(i);}});
+        outer.setLongClickable(true);
+        outer.setOnLongClickListener(v->{
+            boolean wasFavorite=isFavorite(x);
+            toggleFavorite(x,star);
+            Toast.makeText(MainActivity.this,wasFavorite?"Removido dos favoritos":"Adicionado aos favoritos",Toast.LENGTH_SHORT).show();
+            return true;
+        });
         return outer;
     }
     private void playItem(ContentItem item){
