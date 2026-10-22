@@ -177,14 +177,14 @@ public class MainActivity extends Activity {
                 appendGridBatch(gridRenderVersion);
         });
         searchField.setOnEditorActionListener((v,id,event)->{if(id==EditorInfo.IME_ACTION_SEARCH||(event!=null&&event.getKeyCode()==KeyEvent.KEYCODE_ENTER)){currentQuery=searchField.getText().toString().trim();renderGrid();return true;}return false;});
-        currentCategory="all";renderCategories();renderGrid();setContentView(root);
+        currentCategory="all";renderGrid();renderCategories();setContentView(root);
         // Reapply after setContentView, since this can reset focus on some Android TV launchers.
         immersive();
     }
 
     private void addTab(LinearLayout header,String name,String type){
         Button b=button(name,15);LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(dp(100),dp(46));lp.setMargins(dp(3),0,dp(3),0);header.addView(b,lp);
-        b.setOnClickListener(v->{if(!currentTab.equals(type)){currentTab=type;currentCategory="all";currentQuery=searchField==null?"":searchField.getText().toString().trim();renderCategories();renderGrid();}});
+        b.setOnClickListener(v->{if(!currentTab.equals(type)){currentTab=type;currentCategory="all";currentQuery=searchField==null?"":searchField.getText().toString().trim();renderGrid();renderCategories();}});
         focusStyle(b,currentTab.equals(type)?Color.rgb(36,55,88):panel,accent);
     }
     private int gridColumns(){int w=getResources().getConfiguration().screenWidthDp;return Math.max(3,Math.min(6,(w-290)/205));}
@@ -252,10 +252,49 @@ public class MainActivity extends Activity {
         });
     }
     private void addCategory(String name,String key,int count){
-        Button b=button(name,14);b.setGravity(Gravity.CENTER_VERTICAL|Gravity.LEFT);b.setPadding(dp(13),0,dp(7),0);
-        LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-1,dp(46));lp.setMargins(0,dp(2),0,dp(2));categoryList.addView(b,lp);
-        focusStyle(b,currentCategory.equals(key)?Color.rgb(36,55,88):Color.TRANSPARENT,accent);
-        b.setOnClickListener(v->{currentCategory=key;renderCategories();renderGrid();});
+        LinearLayout row=new LinearLayout(this);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        row.setPadding(dp(13),0,dp(11),0);
+        row.setFocusable(true);
+        row.setClickable(true);
+        row.setTag(key);
+        row.setContentDescription(name+", "+count+" itens");
+        TextView categoryName=text(name,14);
+        categoryName.setSingleLine(true);
+        categoryName.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        row.addView(categoryName,new LinearLayout.LayoutParams(0,-2,1));
+        TextView countLabel=text(Integer.toString(count),12);
+        countLabel.setTextColor(muted);
+        LinearLayout.LayoutParams countParams=new LinearLayout.LayoutParams(-2,-2);
+        countParams.setMargins(dp(8),0,0,0);
+        row.addView(countLabel,countParams);
+        row.setBackground(rounded(currentCategory.equals(key)?Color.rgb(36,55,88):Color.TRANSPARENT,10));
+        row.setOnFocusChangeListener((view,hasFocus)->{
+            int color=hasFocus?Color.rgb(41,63,101):(currentCategory.equals(key)?Color.rgb(36,55,88):Color.TRANSPARENT);
+            view.setBackground(rounded(color,10));
+            view.animate().scaleX(hasFocus?1.015f:1f).scaleY(hasFocus?1.015f:1f).setDuration(100).start();
+        });
+        LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-1,dp(46));
+        lp.setMargins(0,dp(2),0,dp(2));
+        categoryList.addView(row,lp);
+        row.setOnClickListener(v->{
+            currentCategory=key;
+            updateCategorySelection();
+            renderGrid();
+        });
+    }
+
+    private void updateCategorySelection(){
+        if(categoryList==null)return;
+        for(int i=0;i<categoryList.getChildCount();i++){
+            View child=categoryList.getChildAt(i);
+            Object value=child.getTag();
+            if(!(value instanceof String))continue;
+            String key=(String)value;
+            int color=child.hasFocus()?Color.rgb(41,63,101):(currentCategory.equals(key)?Color.rgb(36,55,88):Color.TRANSPARENT);
+            child.setBackground(rounded(color,10));
+        }
     }
     private int favoriteCount(){int n=0;for(ContentItem x:CatalogStore.list(currentTab))if(isFavorite(x))n++;return n;}
     private int newCount(){int n=0;for(ContentItem x:CatalogStore.list(currentTab))if(isNew(x))n++;return n;}
@@ -293,7 +332,8 @@ public class MainActivity extends Activity {
                 items.add(item);
             }
             if("new".equals(selected))items.sort((a,b)->Long.compare(parseAdded(b.added),parseAdded(a.added)));
-            else items.sort((a,b)->a.title.compareToIgnoreCase(b.title));
+            else if("all".equals(selected)&&query.isEmpty())items.sort((a,b)->a.title.compareToIgnoreCase(b.title));
+            else if(!query.isEmpty()&&items.size()<5000)items.sort((a,b)->a.title.compareToIgnoreCase(b.title));
             final List<ContentItem> result=items;
             final boolean sourceWasEmpty=source.isEmpty();
             runOnUiThread(()->{
