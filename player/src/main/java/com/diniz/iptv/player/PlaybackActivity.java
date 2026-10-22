@@ -350,6 +350,8 @@ public class PlaybackActivity extends Activity {
 
     @Override public boolean dispatchKeyEvent(KeyEvent event){
         int key=event.getKeyCode();
+        boolean confirm=key==KeyEvent.KEYCODE_DPAD_CENTER||key==KeyEvent.KEYCODE_ENTER||key==KeyEvent.KEYCODE_NUMPAD_ENTER;
+        boolean playPause=key==KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE||key==KeyEvent.KEYCODE_SPACE;
         if(event.getAction()==KeyEvent.ACTION_DOWN&&key==KeyEvent.KEYCODE_DPAD_DOWN
                 &&player!=null&&!player.isPlaying()&&hasEpisodeQueue()
                 &&nextEpisodeButton!=null&&nextEpisodeButton.isEnabled()){
@@ -362,14 +364,15 @@ public class PlaybackActivity extends Activity {
             playerRoot.requestFocus();
             return true;
         }
-        if(event.getAction()==KeyEvent.ACTION_UP
-                &&(key==KeyEvent.KEYCODE_DPAD_CENTER||key==KeyEvent.KEYCODE_ENTER||key==KeyEvent.KEYCODE_NUMPAD_ENTER)){
-            if(nextEpisodeButton!=null&&nextEpisodeButton.hasFocus())return super.dispatchKeyEvent(event);
-            togglePlayback();
-            return true;
+        if(confirm&&nextEpisodeButton!=null&&nextEpisodeButton.hasFocus())
+            return super.dispatchKeyEvent(event);
+        if(confirm){
+            if(event.getAction()==KeyEvent.ACTION_DOWN){togglePlayback();return true;}
+            if(event.getAction()==KeyEvent.ACTION_UP)return true;
         }
-        if(event.getAction()==KeyEvent.ACTION_UP&&(key==KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE||key==KeyEvent.KEYCODE_SPACE)){
-            togglePlayback();return true;
+        if(playPause){
+            if(event.getAction()==KeyEvent.ACTION_DOWN){togglePlayback();return true;}
+            if(event.getAction()==KeyEvent.ACTION_UP)return true;
         }
         if(event.getAction()==KeyEvent.ACTION_UP&&(key==KeyEvent.KEYCODE_DPAD_LEFT||key==KeyEvent.KEYCODE_DPAD_RIGHT)&&player!=null){
             long offset=key==KeyEvent.KEYCODE_DPAD_RIGHT?10000L:-10000L;
@@ -379,9 +382,6 @@ public class PlaybackActivity extends Activity {
             showOverlay();
             if(player.isPlaying())scheduleHideOverlay();
             return true;
-        }
-        if(event.getAction()==KeyEvent.ACTION_UP&&key==KeyEvent.KEYCODE_BACK){
-            return super.dispatchKeyEvent(event);
         }
         return super.dispatchKeyEvent(event);
     }
