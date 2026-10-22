@@ -1,0 +1,134 @@
+name: Build Roblox Classic 360 XEX
+
+on:
+  push:
+    branches:
+      - robloxclassic360-build
+    paths:
+      - 'build-input/roblox360_src.tar.gz.b64'
+      - '.github/workflows/roblox360-xex.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: robloxclassic360-xex
+  cancel-in-progress: false
+
+env:
+  XSDK_SHA: 49307c7b5fe6cc0e262da7b31af58e4e309aa18e
+
+jobs:
+  build-xex:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    steps:
+      - name: Checkout do projeto
+        uses: actions/checkout@v4
+
+      - name: Instalar dependências
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q build-essential bison flex texinfo libgmp-dev libmpfr-dev libmpc-dev \
+            curl xz-utils patch python3 cmake ninja-build git
+
+      - name: Obter XSDK fixado
+        run: |
+          mkdir -p "$HOME/xsdk"
+          cd "$HOME/xsdk"
+          git init -q
+          git remote add origin https://github.com/xenosworks/xsdk.git
+          git fetch -q --depth 1 origin "$XSDK_SHA"
+          git checkout -q FETCH_HEAD
+          test "$(git rev-parse HEAD)" = "$XSDK_SHA"
+          echo "XSDK commit: $(git rev-parse HEAD)"
+
+      - name: Restaurar toolchain Xenon já compilado
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          TC="$HOME/xsdk-gcc"
+          WANT="$(cat "$HOME/xsdk"/tools/toolchain/* | sha256sum | cut -c1-16)"
+          echo "Hash esperado do toolchain: $WANT"
+          if gh release download toolchain-xsdk \
+              --repo j74522823-cmd/Xex-fabrica- \
+              --pattern toolchain.tar.gz --dir "$RUNNER_TEMP"; then
+            tar -C "$HOME" -xzf "$RUNNER_TEMP/toolchain.tar.gz"
+            rm -f "$RUNNER_TEMP/toolchain.tar.gz"
+          else
+            echo "Não consegui baixar o cache público; vou compilar o toolchain do zero."
+          fi
+
+          have_ok() {
+            [ -x "$TC/bin/powerpc-xsdk-elf-gcc" ] &&
+            [ "$(cat "$TC/.tchash" 2>/dev/null || true)" = "$WANT" ]
+          }
+
+          if ! have_ok; then
+            echo "Cache ausente/incompatível; construindo o toolchain pelo script oficial do xsdk."
+            rm -rf "$TC" "$HOME/xsdk-gcc-work"
+            cd "$HOME/xsdk"
+            PREFIX="$TC" WORK="$HOME/xsdk-gcc-work" JOBS="$(nproc)" bash tools/toolchain/build.sh
+            echo "$WANT" > "$TC/.tchash"
+          else
+            echo "Toolchain cacheado validado; não será recompilado."
+          fi
+          "$TC/bin/powerpc-xsdk-elf-gcc" --version | head -1
+
+      - name: Construir bibliotecas do XSDK
+        run: |
+          cd "$HOME/xsdk"
+          make -j"$(nproc)" TOOLCHAIN="$HOME/xsdk-gcc/bin/powerpc-xsdk-elf-" \
+            build/libxsdk.a build/host/libxsc.so
+          test -s build/libxsdk.a
+          test -s build/host/libxsc.so
+
+      - name: Restaurar fontes do Roblox Classic 360
+        run: |
+          set -euo pipefail
+          mkdir -p projetos/roblox_classic360
+          base64 --decode build-input/roblox360_src.tar.gz.b64 | \
+            tar -xz -C projetos/roblox_classic360
+          test -f projetos/roblox_classic360/CMakeLists.txt
+          find projetos/roblox_classic360 -maxdepth 3 -type f -print | sort
+
+      - name: Compilar XEX
+        id: compile
+        shell: bash
+        run: |
+          set -uo pipefail
+          mkdir -p build-output
+          : > build-output/build.log
+          SRC="$PWD/projetos/roblox_classic360"
+          OBJ="$PWD/build-output/cmake"
+          {
+            echo "=== Configuração CMake ==="
+            cmake -S "$SRC" -B "$OBJ" -G Ninja \
+              -DCMAKE_TOOLCHAIN_FILE="$HOME/xsdk/cmake/xsdk.cmake" \
+              -DXSDK_TOOLCHAIN="$HOME/xsdk-gcc" \
+              -DCMAKE_BUILD_TYPE=Release
+            echo "=== Compilação ==="
+            cmake --build "$OBJ" --parallel "$(nproc)"
+          } 2>&1 | tee -a build-output/build.log
+          status=${PIPESTATUS[0]}
+          find "$OBJ" -type f -iname '*.xex' -exec cp -f {} build-output/ \; 2>/dev/null || true
+          echo "=== Arquivos .xex encontrados ===" | tee -a build-output/build.log
+          find build-output -maxdepth 1 -type f -iname '*.xex' -printf '%f %s bytes\n' | tee -a build-output/build.log
+          if ! find build-output -maxdepth 1 -type f -iname '*.xex' | grep -q .; then
+            echo "FALHA: a compilação não produziu um .xex." | tee -a build-output/build.log
+            exit "${status:-1}"
+          fi
+          exit "$status"
+
+      - name: Publicar logs e arquivos gerados (mesmo em falha)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: RobloxClassic360-XEX-build-${{ github.run_number }}
+          path: |
+            build-output/
+          if-no-files-found: warn
+          retention-days: 30
