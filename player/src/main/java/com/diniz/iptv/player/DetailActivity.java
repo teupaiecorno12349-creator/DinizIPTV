@@ -7,6 +7,7 @@ import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
 import android.os.Bundle;
 import android.view.Gravity;
+import android.view.View;
 import android.view.WindowManager;
 import android.widget.*;
 import java.util.ArrayList;
@@ -156,7 +157,16 @@ public class DetailActivity extends Activity {
                     ContentItem ep=episodes.get(i);
                     if(ep.season!=lastSeason){lastSeason=ep.season;TextView sh=text("TEMPORADA "+lastSeason,13);sh.setTextColor(Color.rgb(130,167,255));sh.setTypeface(Typeface.DEFAULT_BOLD);sh.setPadding(0,dp(12),0,dp(5));list.addView(sh);}
                     Button eb=button(String.format(Locale.ROOT,"%02d  %s",ep.episode,ep.episodeTitle==null||ep.episodeTitle.isEmpty()?"Episódio "+ep.episode:ep.episodeTitle));
-                    eb.setGravity(Gravity.LEFT|Gravity.CENTER_VERTICAL);eb.setBackground(bg(Color.rgb(17,24,35),8));LinearLayout.LayoutParams elp=new LinearLayout.LayoutParams(-1,dp(47));elp.setMargins(0,dp(2),0,dp(2));list.addView(eb,elp);
+                    eb.setGravity(Gravity.LEFT|Gravity.CENTER_VERTICAL);
+                    eb.setPadding(dp(16),0,dp(12),0);
+                    eb.setBackground(bg(Color.rgb(17,24,35),8));
+                    eb.setFocusable(true);
+                    eb.setFocusableInTouchMode(true);
+                    eb.setOnFocusChangeListener((focusedView,hasFocus)->{
+                        focusedView.setBackground(bg(hasFocus?Color.rgb(41,75,132):Color.rgb(17,24,35),8));
+                        focusedView.animate().scaleX(hasFocus?1.025f:1f).scaleY(hasFocus?1.025f:1f).setDuration(100).start();
+                    });
+                    LinearLayout.LayoutParams elp=new LinearLayout.LayoutParams(-1,dp(49));elp.setMargins(0,dp(3),0,dp(3));list.addView(eb,elp);
                     final int ix=i;eb.setOnClickListener(v->playEpisodeList(item,episodes,ix));
                 }
             }
