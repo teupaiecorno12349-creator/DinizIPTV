@@ -188,7 +188,7 @@ public class MainActivity extends Activity {
             return false;
         });
         searchField.setOnKeyListener((v,keyCode,event)->{
-            if((keyCode==KeyEvent.KEYCODE_ENTER||keyCode==KeyEvent.KEYCODE_NUMPAD_ENTER||keyCode==KeyEvent.KEYCODE_DPAD_CENTER)
+            if((keyCode==KeyEvent.KEYCODE_ENTER||keyCode==KeyEvent.KEYCODE_NUMPAD_ENTER)
                     &&event.getAction()==KeyEvent.ACTION_UP){
                 currentQuery=searchField.getText().toString().trim();renderGrid();return true;
             }
