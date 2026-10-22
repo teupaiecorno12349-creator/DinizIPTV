@@ -17,7 +17,7 @@ import android.view.WindowManager;
 import android.widget.Button;
 import android.widget.FrameLayout;
 import android.widget.LinearLayout;
-import android.widget.ProgressBar;
+import android.widget.SeekBar;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -49,20 +49,24 @@ public class PlaybackActivity extends Activity {
     private FrameLayout playerRoot;
     private LinearLayout bottomPanel;
     private TextView pauseIndicator,titleText,timeText;
-    private ProgressBar timeBar;
+    private SeekBar timeBar;
     private Button nextEpisodeButton;
     private final Handler handler=new Handler(Looper.getMainLooper());
     private final Runnable hideOverlayTask=()->{
-        if(player!=null&&player.isPlaying()&&bottomPanel!=null)bottomPanel.setVisibility(View.GONE);
+        if(player!=null&&player.isPlaying()&&bottomPanel!=null&&(timeBar==null||!timeBar.hasFocus())&&(nextEpisodeButton==null||!nextEpisodeButton.hasFocus()))bottomPanel.setVisibility(View.GONE);
     };
     private final Runnable updateTask=new Runnable(){
         @Override public void run(){
             updatePlaybackTime();
+            saveProgress(false);
             if(player!=null&&!released)handler.postDelayed(this,UI_REFRESH_MS);
         }
     };
     private final List<MediaItem> mediaItems=new ArrayList<>();
     private long resumePos=0;
+    private long lastProgressSaveAt=0L;
+    private String singleResumeKey;
+    private android.content.SharedPreferences playbackProgress;
     private int startIndex=0,retries=0;
     private long[] episodeIds,seriesIds;
     private int[] seasons,episodeNumbers;
@@ -74,6 +78,7 @@ public class PlaybackActivity extends Activity {
         getWindow().setFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN,WindowManager.LayoutParams.FLAG_FULLSCREEN);
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         getWindow().getDecorView().setSystemUiVisibility(5894|1024|512);
+        playbackProgress=getSharedPreferences("marcin_playback_progress",MODE_PRIVATE);
         buildPlayerSurface();
         buildQueue(getIntent());
         if(mediaItems.isEmpty()){
@@ -132,12 +137,38 @@ public class PlaybackActivity extends Activity {
         timeParams.setMargins(0,dp(2),0,dp(3));
         bottomPanel.addView(timeText,timeParams);
 
-        timeBar=new ProgressBar(this,null,android.R.attr.progressBarStyleHorizontal);
+        timeBar=new SeekBar(this);
         timeBar.setMax(1000);
-        timeBar.setIndeterminate(false);
+        timeBar.setProgress(0);
+        timeBar.setFocusable(true);
+        timeBar.setFocusableInTouchMode(true);
+        timeBar.setContentDescription("Barra de busca do vídeo. Use esquerda e direita para escolher qualquer ponto da reprodução.");
         timeBar.setProgressTintList(ColorStateList.valueOf(Color.rgb(78,132,255)));
         timeBar.setProgressBackgroundTintList(ColorStateList.valueOf(Color.rgb(63,72,86)));
-        bottomPanel.addView(timeBar,new LinearLayout.LayoutParams(-1,dp(4)));
+        timeBar.setThumbTintList(ColorStateList.valueOf(Color.rgb(245,248,255)));
+        bottomPanel.addView(timeBar,new LinearLayout.LayoutParams(-1,dp(26)));
+        timeBar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener(){
+            @Override public void onProgressChanged(SeekBar bar,int progress,boolean fromUser){
+                if(fromUser&&player!=null){
+                    long duration=player.getDuration();
+                    if(duration>0&&duration!=C.TIME_UNSET){
+                        long target=duration*progress/1000L;
+                        timeText.setText(formatTime(target)+" / "+formatTime(duration)+"  •  Restam "+formatTime(Math.max(0,duration-target)));
+                    }
+                }
+            }
+            @Override public void onStartTrackingTouch(SeekBar bar){
+                showOverlay();handler.removeCallbacks(hideOverlayTask);
+            }
+            @Override public void onStopTrackingTouch(SeekBar bar){
+                if(player!=null){
+                    long duration=player.getDuration();
+                    if(duration>0&&duration!=C.TIME_UNSET)player.seekTo(duration*bar.getProgress()/1000L);
+                    saveProgress(true);updatePlaybackTime();
+                    if(player.isPlaying())scheduleHideOverlay();
+                }
+            }
+        });
 
         nextEpisodeButton=new Button(this);
         nextEpisodeButton.setAllCaps(false);
@@ -159,6 +190,7 @@ public class PlaybackActivity extends Activity {
     }
 
     private void buildQueue(android.content.Intent intent){
+        singleResumeKey=intent.getStringExtra("resume_key");
         ArrayList<String> urls=intent.getStringArrayListExtra("playlist_urls");
         ArrayList<String> titles=intent.getStringArrayListExtra("playlist_titles");
         episodeIds=intent.getLongArrayExtra("episode_ids");
@@ -232,6 +264,7 @@ public class PlaybackActivity extends Activity {
                 if(state==Player.STATE_READY)retries=0;
                 updatePlaybackTime();
                 if(state==Player.STATE_ENDED){
+                    saveProgress(true);
                     showOverlay();
                     if(pauseIndicator!=null)pauseIndicator.setVisibility(View.VISIBLE);
                 }
@@ -248,9 +281,24 @@ public class PlaybackActivity extends Activity {
             }
             @Override public void onMediaItemTransition(MediaItem item,int reason){
                 if(player==null)return;
-                saveProgress();
                 updateTitle();
                 updatePlaybackTime();
+                if(reason!=Player.MEDIA_ITEM_TRANSITION_REASON_PLAYLIST_CHANGED){
+                    int current=player.getCurrentMediaItemIndex();
+                    String key=progressKeyForIndex(current);
+                    long saved=key==null?0L:playbackProgress.getLong("pos_"+key,0L);
+                    if(saved>0L){
+                        handler.post(()->{
+                            if(player!=null&&!released&&player.getCurrentMediaItemIndex()==current){
+                                long duration=player.getDuration();
+                                long target=duration>0&&duration!=C.TIME_UNSET?Math.min(saved,Math.max(0,duration-1000L)):saved;
+                                player.seekTo(target);
+                                resumePos=target;
+                                updatePlaybackTime();
+                            }
+                        });
+                    }
+                }
                 if(reason==Player.MEDIA_ITEM_TRANSITION_REASON_AUTO
                         &&!getSharedPreferences(NetworkStack.PREFS,MODE_PRIVATE).getBoolean(NetworkStack.AUTOPLAY_NEXT,true)){
                     player.pause();
@@ -260,11 +308,15 @@ public class PlaybackActivity extends Activity {
             }
         });
         view.setPlayer(player);
+        String initialKey=progressKeyForIndex(startIndex);
+        resumePos=initialKey==null?0L:playbackProgress.getLong("pos_"+initialKey,0L);
+        if(resumePos<0L)resumePos=0L;
         player.setMediaItems(mediaItems,startIndex,resumePos);
         player.prepare();
         player.play();
         updateTitle();
         updatePlaybackTime();
+        playerRoot.requestFocus();
         handler.post(updateTask);
     }
 
@@ -285,8 +337,8 @@ public class PlaybackActivity extends Activity {
         long duration=player.getDuration();
         if(duration<0||duration==C.TIME_UNSET){
             timeText.setText(formatTime(position)+" / --:--  •  Tempo restante --:--");
-            timeBar.setProgress(0);
-        }else{
+            if(!timeBar.hasFocus())timeBar.setProgress(0);
+        }else if(!timeBar.hasFocus()){
             long remaining=Math.max(0,duration-position);
             timeText.setText(formatTime(position)+" / "+formatTime(duration)+"  •  Restam "+formatTime(remaining));
             timeBar.setProgress(duration>0?(int)Math.min(1000,(position*1000L)/duration):0);
@@ -352,18 +404,23 @@ public class PlaybackActivity extends Activity {
     @Override public boolean dispatchKeyEvent(KeyEvent event){
         int key=event.getKeyCode();
         boolean confirm=key==KeyEvent.KEYCODE_DPAD_CENTER||key==KeyEvent.KEYCODE_ENTER||key==KeyEvent.KEYCODE_NUMPAD_ENTER;
-        boolean playPause=key==KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE||key==KeyEvent.KEYCODE_SPACE;
+        boolean left=key==KeyEvent.KEYCODE_DPAD_LEFT,right=key==KeyEvent.KEYCODE_DPAD_RIGHT;
         if(event.getAction()==KeyEvent.ACTION_DOWN&&key==KeyEvent.KEYCODE_DPAD_DOWN
-                &&player!=null&&!player.isPlaying()&&hasEpisodeQueue()
-                &&nextEpisodeButton!=null&&nextEpisodeButton.isEnabled()){
-            showOverlay();
-            nextEpisodeButton.requestFocus();
-            return true;
+                &&timeBar!=null&&timeBar.hasFocus()&&nextEpisodeButton!=null
+                &&nextEpisodeButton.getVisibility()==View.VISIBLE&&nextEpisodeButton.isEnabled()){
+            nextEpisodeButton.requestFocus();return true;
         }
         if(event.getAction()==KeyEvent.ACTION_DOWN&&key==KeyEvent.KEYCODE_DPAD_UP
                 &&nextEpisodeButton!=null&&nextEpisodeButton.hasFocus()){
-            playerRoot.requestFocus();
-            return true;
+            timeBar.requestFocus();showOverlay();return true;
+        }
+        if(event.getAction()==KeyEvent.ACTION_DOWN&&key==KeyEvent.KEYCODE_DPAD_UP
+                &&playerRoot!=null&&playerRoot.hasFocus()){
+            showOverlay();timeBar.requestFocus();return true;
+        }
+        if(timeBar!=null&&timeBar.hasFocus()&&(left||right||confirm)){
+            if(event.getAction()==KeyEvent.ACTION_DOWN)showOverlay();
+            return super.dispatchKeyEvent(event);
         }
         if(confirm&&nextEpisodeButton!=null&&nextEpisodeButton.hasFocus())
             return super.dispatchKeyEvent(event);
@@ -371,16 +428,15 @@ public class PlaybackActivity extends Activity {
             if(event.getAction()==KeyEvent.ACTION_DOWN){togglePlayback();return true;}
             if(event.getAction()==KeyEvent.ACTION_UP)return true;
         }
-        if(playPause){
+        if(key==KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE||key==KeyEvent.KEYCODE_SPACE){
             if(event.getAction()==KeyEvent.ACTION_DOWN){togglePlayback();return true;}
             if(event.getAction()==KeyEvent.ACTION_UP)return true;
         }
-        if(event.getAction()==KeyEvent.ACTION_UP&&(key==KeyEvent.KEYCODE_DPAD_LEFT||key==KeyEvent.KEYCODE_DPAD_RIGHT)&&player!=null){
-            long offset=key==KeyEvent.KEYCODE_DPAD_RIGHT?10000L:-10000L;
+        if(event.getAction()==KeyEvent.ACTION_UP&&(left||right)&&player!=null){
+            long offset=right?30000L:-30000L;
             long duration=player.getDuration();long position=Math.max(0,player.getCurrentPosition()+offset);
             if(duration>=0&&duration!=C.TIME_UNSET)position=Math.min(duration,position);
-            player.seekTo(position);
-            showOverlay();
+            player.seekTo(position);saveProgress(true);showOverlay();
             if(player.isPlaying())scheduleHideOverlay();
             return true;
         }
@@ -398,16 +454,34 @@ public class PlaybackActivity extends Activity {
         }
     }
 
-    private void saveProgress(){
-        if(player==null||seriesIds==null||episodeIds==null)return;
+    private String progressKeyForIndex(int index){
+        if(seriesIds!=null&&episodeIds!=null&&index>=0&&index<seriesIds.length&&index<episodeIds.length
+                &&seriesIds[index]>0&&episodeIds[index]>0)
+            return "series_"+seriesIds[index]+"_episode_"+episodeIds[index];
+        return singleResumeKey==null||singleResumeKey.trim().isEmpty()?null:singleResumeKey;
+    }
+
+    private void saveProgress(){saveProgress(false);}
+
+    private void saveProgress(boolean force){
+        if(player==null||playbackProgress==null)return;
+        long now=System.currentTimeMillis();
+        if(!force&&now-lastProgressSaveAt<5000L)return;
         int ix=player.getCurrentMediaItemIndex();
-        if(ix<0||ix>=seriesIds.length||ix>=episodeIds.length)return;
-        long sid=seriesIds[ix],eid=episodeIds[ix];
-        if(sid>0&&eid>0)getSharedPreferences("marcin_progress",MODE_PRIVATE).edit()
-                .putLong("last_episode_"+sid,eid)
-                .putInt("last_season_"+sid,seasons!=null&&ix<seasons.length?seasons[ix]:0)
-                .putInt("last_episode_number_"+sid,episodeNumbers!=null&&ix<episodeNumbers.length?episodeNumbers[ix]:0)
-                .apply();
+        if(ix<0)return;
+        String key=progressKeyForIndex(ix);
+        if(key==null)return;
+        long position=player.getPlaybackState()==Player.STATE_ENDED?0L:Math.max(0L,player.getCurrentPosition());
+        resumePos=position;lastProgressSaveAt=now;
+        playbackProgress.edit().putLong("pos_"+key,position).apply();
+        if(seriesIds!=null&&episodeIds!=null&&ix<seriesIds.length&&ix<episodeIds.length){
+            long sid=seriesIds[ix],eid=episodeIds[ix];
+            if(sid>0&&eid>0)getSharedPreferences("marcin_progress",MODE_PRIVATE).edit()
+                    .putLong("last_episode_"+sid,eid)
+                    .putInt("last_season_"+sid,seasons!=null&&ix<seasons.length?seasons[ix]:0)
+                    .putInt("last_episode_number_"+sid,episodeNumbers!=null&&ix<episodeNumbers.length?episodeNumbers[ix]:0)
+                    .apply();
+        }
     }
 
     private void showError(PlaybackException error){
@@ -421,9 +495,14 @@ public class PlaybackActivity extends Activity {
     @Override protected void onStop(){
         super.onStop();released=true;handler.removeCallbacksAndMessages(null);
         if(player!=null){
-            resumePos=player.getCurrentPosition();saveProgress();
+            saveProgress(true);resumePos=player.getCurrentPosition();
             view.setPlayer(null);player.release();player=null;
         }
+    }
+
+    @Override public void onUserInteraction(){
+        super.onUserInteraction();
+        CatalogRefreshScheduler.onUserActivity(this);
     }
 
     @Override public void onBackPressed(){
