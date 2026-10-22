@@ -1,4 +1,4 @@
-name: Build Classic Disaster Survival XEX (reuse xSDK cache) # rebuild after C warning cleanup
+name: Build Classic Disaster Survival XEX (scaled island and animated R6)
 
 on:
   push:
@@ -137,8 +137,19 @@ jobs:
           PY
           mkdir -p classic-disaster-artifact
           cp "$XEX" classic-disaster-artifact/ClassicDisaster360.xex
-          cp classic-disaster-src/ClassicDisaster360/README.md classic-disaster-artifact/
-          sha256sum classic-disaster-artifact/ClassicDisaster360.xex > classic-disaster-artifact/SHA256SUMS.txt
+          cp classic-disaster-src/ClassicDisaster360/main.c \
+             classic-disaster-src/ClassicDisaster360/island_geometry.h \
+             classic-disaster-src/ClassicDisaster360/CMakeLists.txt \
+             classic-disaster-src/ClassicDisaster360/world_vs.hlsl \
+             classic-disaster-src/ClassicDisaster360/world_ps.hlsl \
+             classic-disaster-src/ClassicDisaster360/README.md \
+             classic-disaster-artifact/
+          sha256sum classic-disaster-artifact/ClassicDisaster360.xex \
+                    classic-disaster-artifact/main.c \
+                    classic-disaster-artifact/island_geometry.h \
+                    classic-disaster-artifact/CMakeLists.txt \
+                    classic-disaster-artifact/world_vs.hlsl \
+                    classic-disaster-artifact/world_ps.hlsl > classic-disaster-artifact/SHA256SUMS.txt
 
       - name: Upload Classic Disaster Survival XEX
         uses: actions/upload-artifact@v4
