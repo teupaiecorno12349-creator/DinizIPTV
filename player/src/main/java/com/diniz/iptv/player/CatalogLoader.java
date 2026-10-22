@@ -2,7 +2,6 @@ package com.diniz.iptv.player;
 
 import android.content.Context;
 import java.util.*;
-import java.util.concurrent.*;
 
 public final class CatalogLoader {
     public interface Listener {
@@ -10,39 +9,89 @@ public final class CatalogLoader {
         void onComplete();
         void onError(String message);
     }
+
     private final Context context;
     private final XtreamClient api;
     private final Listener listener;
-    private final ExecutorService runner=Executors.newSingleThreadExecutor();
     private volatile boolean cancelled;
+    private Thread worker;
 
-    public CatalogLoader(Context c,XtreamClient a,Listener l){context=c.getApplicationContext();api=a;listener=l;}
-    public void start(){runner.execute(this::load);}
-    public void cancel(){cancelled=true;runner.shutdownNow();}
+    public CatalogLoader(Context c,XtreamClient a,Listener l){
+        context=c.getApplicationContext();
+        api=a;
+        listener=l;
+    }
+
+    public synchronized void start(){
+        if(worker!=null)return;
+        worker=new Thread(this::load,"Marcin-Catalog-Loader");
+        worker.start();
+    }
+
+    public synchronized void cancel(){
+        cancelled=true;
+        if(worker!=null)worker.interrupt();
+    }
 
     private void progress(int done,int total,String msg){
-        if(listener!=null)listener.onProgress(done,total,msg);
+        if(!cancelled&&listener!=null)listener.onProgress(done,total,msg);
     }
+
     private void load(){
         try{
-            progress(0,6,"Validando acesso Xtream Codes…");
+            progress(0,7,"Validando acesso Xtream Codes…");
             api.login();
-            progress(1,6,"Baixando categorias e canais…");
+            if(cancelled)return;
+
+            progress(1,7,"Consultando categorias…");
             List<CatalogCategory> liveCats=api.categories("live");
+            if(cancelled)return;
             List<CatalogCategory> movieCats=api.categories("movie");
+            if(cancelled)return;
             List<CatalogCategory> seriesCats=api.categories("series");
-            // Keep the previous on-device catalog intact until the complete lists have downloaded.
-            progress(2,6,"Baixando lista completa de canais…");
+            if(cancelled)return;
+
+            progress(4,7,"Listando canais…");
             List<ContentItem> live=api.streams("live");
-            List<ContentItem> movies;
-            List<ContentItem> series;
-            progress(3,6,"Baixando lista completa de filmes…");
-            movies=api.streams("movie");
-            progress(4,6,"Baixando lista completa de séries…");
-            series=api.streams("series");
-            applyCategoryNames(live,liveCats);applyCategoryNames(movies,movieCats);applyCategoryNames(series,seriesCats);
+            if(cancelled)return;
+            progress(5,7,"Listando filmes…");
+            List<ContentItem> movies=api.streams("movie");
+            if(cancelled)return;
+            progress(6,7,"Listando séries…");
+            List<ContentItem> series=api.streams("series");
+            if(cancelled)return;
+
+            /*
+             * Xtream get_vod_streams/get_series/get_live_streams already return
+             * the bulk catalogue and poster URLs. Never issue get_vod_info or
+             * get_series_info for every row at login: those are detail endpoints
+             * and can mean thousands of serial requests on large playlists.
+             * Fetch full synopsis/credits/episodes only when the user opens an item.
+             */
+            applyCategoryNames(live,liveCats);
+            applyCategoryNames(movies,movieCats);
+            applyCategoryNames(series,seriesCats);
             synchronized(CatalogStore.class){
-                CatalogStore.CHANNELS.clear();CatalogStore.MOVIES.clear();CatalogStore.SERIES.clear();
+                Map<String,ContentItem> oldMetadata=new HashMap<>();
+                remember(oldMetadata,CatalogStore.MOVIES);
+                remember(oldMetadata,CatalogStore.SERIES);
+                for(ContentItem item:movies)inheritMetadata(item,oldMetadata.get(item.key()));
+                for(ContentItem item:series)inheritMetadata(item,oldMetadata.get(item.key()));
+
+                Set<Long> seriesIds=new HashSet<>();
+                for(ContentItem item:series)seriesIds.add(item.id);
+                Map<Long,List<ContentItem>> oldEpisodes=new LinkedHashMap<>();
+                synchronized(CatalogStore.EPISODES){
+                    for(Map.Entry<Long,List<ContentItem>> e:CatalogStore.EPISODES.entrySet()){
+                        if(seriesIds.contains(e.getKey()))oldEpisodes.put(e.getKey(),e.getValue());
+                    }
+                    CatalogStore.EPISODES.clear();
+                    CatalogStore.EPISODES.putAll(oldEpisodes);
+                }
+
+                CatalogStore.CHANNELS.clear();
+                CatalogStore.MOVIES.clear();
+                CatalogStore.SERIES.clear();
                 CatalogStore.CHANNELS.addAll(live);
                 CatalogStore.MOVIES.addAll(movies);
                 CatalogStore.SERIES.addAll(series);
@@ -50,56 +99,50 @@ public final class CatalogLoader {
                 CatalogStore.CATEGORIES.put("live",liveCats);
                 CatalogStore.CATEGORIES.put("movie",movieCats);
                 CatalogStore.CATEGORIES.put("series",seriesCats);
-                synchronized(CatalogStore.EPISODES){CatalogStore.EPISODES.clear();}
             }
             if(cancelled)return;
 
-            List<ContentItem> details=new ArrayList<>(movies.size()+series.size());
-            details.addAll(movies);details.addAll(series);
-            int total=details.size();
-            progress(0,total,"Catálogo pronto; buscando sinopses, anos, capas e episódios…");
-            if(total>0){
-                ExecutorService pool=Executors.newFixedThreadPool(3);
-                CompletionService<Boolean> completion=new ExecutorCompletionService<>(pool);
-                for(ContentItem x:details){
-                    completion.submit(()->{
-                        if(cancelled)return false;
-                        try{
-                            if("movie".equals(x.type))api.enrichMovie(x);
-                            else {
-                                List<ContentItem> eps=api.enrichSeries(x);
-                                synchronized(CatalogStore.EPISODES){CatalogStore.EPISODES.put(x.id,eps);}
-                            }
-                        }catch(Exception ignored){
-                            // Keep metadata supplied by the base listing if a detail endpoint is absent/throttled.
-                        }
-                        try{Thread.sleep(65L);}catch(InterruptedException e){Thread.currentThread().interrupt();}
-                        return true;
-                    });
-                }
-                for(int i=1;i<=total;i++){
-                    if(cancelled){pool.shutdownNow();return;}
-                    try{completion.take().get();}catch(Exception ignored){}
-                    if(i==total||i%3==0)progress(i,total,"Sinopses e episódios: "+i+" de "+total);
-                }
-                pool.shutdown();
-                pool.awaitTermination(15,TimeUnit.SECONDS);
-            }
+            progress(7,7,"Salvando catálogo local…");
+            CatalogStore.save(context);
             if(cancelled)return;
-            progress(1,1,"Guardando catálogo no dispositivo…");
-            try{CatalogStore.save(context);}catch(Exception ignored){}
+
             if(listener!=null)listener.onComplete();
+        }catch(InterruptedException e){
+            Thread.currentThread().interrupt();
+            if(!cancelled&&listener!=null)listener.onError("A consulta do catálogo foi interrompida.");
         }catch(Exception e){
             if(!cancelled&&listener!=null){
                 String message=e.getMessage()==null?"Falha ao carregar o catálogo Xtream Codes.":e.getMessage();
                 listener.onError(message);
             }
-        }finally{runner.shutdown();}
+        }
     }
+
+    private static void remember(Map<String,ContentItem> dest,List<ContentItem> items){
+        for(ContentItem item:items)dest.put(item.key(),item);
+    }
+
+    private static void inheritMetadata(ContentItem fresh,ContentItem cached){
+        if(cached==null)return;
+        if(empty(fresh.description))fresh.description=cached.description;
+        if(empty(fresh.posterUrl))fresh.posterUrl=cached.posterUrl;
+        if(empty(fresh.backdropUrl))fresh.backdropUrl=cached.backdropUrl;
+        if(empty(fresh.year))fresh.year=cached.year;
+        if(empty(fresh.genres))fresh.genres=cached.genres;
+        if(empty(fresh.rating))fresh.rating=cached.rating;
+        if(empty(fresh.director))fresh.director=cached.director;
+        if(empty(fresh.cast))fresh.cast=cached.cast;
+        if(empty(fresh.duration))fresh.duration=cached.duration;
+        if(empty(fresh.categoryName))fresh.categoryName=cached.categoryName;
+    }
+
+    private static boolean empty(String s){return s==null||s.trim().isEmpty();}
 
     private static void applyCategoryNames(List<ContentItem> items,List<CatalogCategory> categories){
         Map<String,String> names=new HashMap<>();
         for(CatalogCategory c:categories)names.put(c.id,c.name);
-        for(ContentItem x:items)if(x.categoryName==null||x.categoryName.isEmpty())x.categoryName=names.getOrDefault(x.categoryId,"Sem categoria");
+        for(ContentItem x:items){
+            if(empty(x.categoryName))x.categoryName=names.getOrDefault(x.categoryId,"Sem categoria");
+        }
     }
 }
