@@ -25,6 +25,11 @@ public class MainActivity extends Activity {
     private SharedPreferences account;
     private LinearLayout root,categoryList,contentArea;
     private GridLayout grid;
+    private ScrollView contentScroll;
+    private static final int GRID_BATCH_SIZE=18;
+    private List<ContentItem> displayedItems=Collections.emptyList();
+    private int gridRenderVersion=0,categoryRenderVersion=0,renderedCount=0;
+    private boolean appendingGridBatch=false;
     private EditText serverField,userField,passwordField,searchField;
     private TextView statusView,contentTitle,contentCount,loadingTitle,loadingMessage;
     private ProgressBar loadingBar;
@@ -165,8 +170,12 @@ public class MainActivity extends Activity {
         LinearLayout titleRow=new LinearLayout(this);titleRow.setGravity(Gravity.CENTER_VERTICAL);contentArea.addView(titleRow,new LinearLayout.LayoutParams(-1,dp(42)));
         contentTitle=text("",23);contentTitle.setTypeface(Typeface.DEFAULT_BOLD);titleRow.addView(contentTitle,new LinearLayout.LayoutParams(0,-2,1));
         contentCount=text("",13);contentCount.setTextColor(muted);titleRow.addView(contentCount);
-        ScrollView contentScroll=new ScrollView(this);contentScroll.setFillViewport(false);contentScroll.setVerticalScrollBarEnabled(false);contentArea.addView(contentScroll,new LinearLayout.LayoutParams(-1,0,1));
+        contentScroll=new ScrollView(this);contentScroll.setFillViewport(false);contentScroll.setVerticalScrollBarEnabled(false);contentArea.addView(contentScroll,new LinearLayout.LayoutParams(-1,0,1));
         grid=new GridLayout(this);grid.setColumnCount(gridColumns());grid.setUseDefaultMargins(false);contentScroll.addView(grid);
+        contentScroll.setOnScrollChangeListener((View v,int sx,int sy,int oldSx,int oldSy)->{
+            if(contentScroll!=null&&grid!=null&&sy+contentScroll.getHeight()>=grid.getHeight()-dp(650))
+                appendGridBatch(gridRenderVersion);
+        });
         searchField.setOnEditorActionListener((v,id,event)->{if(id==EditorInfo.IME_ACTION_SEARCH||(event!=null&&event.getKeyCode()==KeyEvent.KEYCODE_ENTER)){currentQuery=searchField.getText().toString().trim();renderGrid();return true;}return false;});
         currentCategory="all";renderCategories();renderGrid();setContentView(root);
         // Reapply after setContentView, since this can reset focus on some Android TV launchers.
@@ -180,22 +189,67 @@ public class MainActivity extends Activity {
     }
     private int gridColumns(){int w=getResources().getConfiguration().screenWidthDp;return Math.max(3,Math.min(6,(w-290)/205));}
 
+    private static final class CategoryRow {
+        final String name,key;
+        final int count;
+        final boolean heading;
+        CategoryRow(String name,String key,int count,boolean heading){this.name=name;this.key=key;this.count=count;this.heading=heading;}
+    }
+
     private void renderCategories(){
-        if(categoryList==null)return;categoryList.removeAllViews();
-        TextView label=text("BIBLIOTECA",11);label.setTextColor(muted);label.setTypeface(Typeface.DEFAULT_BOLD);label.setPadding(dp(10),dp(3),0,dp(10));categoryList.addView(label);
-        addCategory("Todos","all",CatalogStore.list(currentTab).size());
-        addCategory("★  Favoritos","favorites",favoriteCount());
-        if(!"live".equals(currentTab)){
-            addCategory("✦  Lançamentos","new",newCount());
-            TreeSet<Integer> years=new TreeSet<>(Collections.reverseOrder());
-            for(ContentItem x:CatalogStore.list(currentTab))if(x.year!=null&&x.year.matches("\\d{4}"))try{years.add(Integer.parseInt(x.year));}catch(Exception ignored){}
-            int thisYear=java.util.Calendar.getInstance().get(java.util.Calendar.YEAR);
-            if(years.isEmpty())for(int y=thisYear;y>=thisYear-5;y--)years.add(y);
-            for(Integer y:years)addCategory(("series".equals(currentTab)?"Séries ":"Filmes ")+y,"year:"+y,countForYear(y));
-        }
-        TextView section=text("CATEGORIAS",11);section.setTextColor(muted);section.setTypeface(Typeface.DEFAULT_BOLD);section.setPadding(dp(10),dp(15),0,dp(10));categoryList.addView(section);
-        List<CatalogCategory> cats=CatalogStore.CATEGORIES.get(currentTab);
-        if(cats!=null)for(CatalogCategory c:cats)addCategory(c.name,"cat:"+c.id,countForCategory(c.id));
+        if(categoryList==null)return;
+        final int generation=++categoryRenderVersion;
+        final String tab=currentTab,selected=currentCategory;
+        io.execute(()->{
+            List<ContentItem> source;
+            List<CatalogCategory> categories;
+            synchronized(CatalogStore.class){
+                source=new ArrayList<>(CatalogStore.list(tab));
+                List<CatalogCategory> saved=CatalogStore.CATEGORIES.get(tab);
+                categories=saved==null?new ArrayList<>():new ArrayList<>(saved);
+            }
+            SharedPreferences favorites=getSharedPreferences("marcin_favorites",MODE_PRIVATE);
+            Map<String,Integer> categoryCounts=new HashMap<>();
+            TreeMap<Integer,Integer> yearCounts=new TreeMap<>(Collections.reverseOrder());
+            int favoriteTotal=0,newTotal=0;
+            int calendarYear=java.util.Calendar.getInstance().get(java.util.Calendar.YEAR);
+            for(ContentItem item:source){
+                if(favorites.getBoolean(item.key(),false))favoriteTotal++;
+                if(isNew(item))newTotal++;
+                if(item.categoryId!=null&&!item.categoryId.isEmpty())
+                    categoryCounts.put(item.categoryId,categoryCounts.getOrDefault(item.categoryId,0)+1);
+                if(item.year!=null&&item.year.matches("\\d{4}")){
+                    try{int y=Integer.parseInt(item.year);yearCounts.put(y,yearCounts.getOrDefault(y,0)+1);}catch(Exception ignored){}
+                }
+            }
+            if(yearCounts.isEmpty()&&!"live".equals(tab))
+                for(int y=calendarYear;y>=calendarYear-5;y--)yearCounts.put(y,0);
+            List<CategoryRow> rows=new ArrayList<>();
+            rows.add(new CategoryRow("BIBLIOTECA","",0,true));
+            rows.add(new CategoryRow("Todos","all",source.size(),false));
+            rows.add(new CategoryRow("★  Favoritos","favorites",favoriteTotal,false));
+            if(!"live".equals(tab)){
+                rows.add(new CategoryRow("✦  Lançamentos","new",newTotal,false));
+                for(Map.Entry<Integer,Integer> y:yearCounts.entrySet())
+                    rows.add(new CategoryRow(("series".equals(tab)?"Séries ":"Filmes ")+y.getKey(),"year:"+y.getKey(),y.getValue(),false));
+            }
+            rows.add(new CategoryRow("CATEGORIAS","",0,true));
+            for(CatalogCategory category:categories)
+                rows.add(new CategoryRow(category.name,"cat:"+category.id,categoryCounts.getOrDefault(category.id,0),false));
+            runOnUiThread(()->{
+                if(isFinishing()||isDestroyed()||generation!=categoryRenderVersion
+                        ||!tab.equals(currentTab)||!selected.equals(currentCategory)||categoryList==null)return;
+                categoryList.removeAllViews();
+                for(CategoryRow row:rows){
+                    if(row.heading){
+                        TextView heading=text(row.name,11);heading.setTextColor(muted);heading.setTypeface(Typeface.DEFAULT_BOLD);
+                        heading.setPadding(dp(10),dp("BIBLIOTECA".equals(row.name)?3:15),0,dp(10));categoryList.addView(heading);
+                    }else{
+                        addCategory(row.name,row.key,row.count);
+                    }
+                }
+            });
+        });
     }
     private void addCategory(String name,String key,int count){
         Button b=button(name,14);b.setGravity(Gravity.CENTER_VERTICAL|Gravity.LEFT);b.setPadding(dp(13),0,dp(7),0);
@@ -210,29 +264,73 @@ public class MainActivity extends Activity {
 
     private void renderGrid(){
         if(grid==null)return;
-        grid.removeAllViews();grid.setColumnCount(gridColumns());
-        List<ContentItem> source=CatalogStore.list(currentTab),items=new ArrayList<>();
-        String q=currentQuery==null?"":currentQuery.trim().toLowerCase(Locale.ROOT);
-        for(ContentItem x:source){
-            if("favorites".equals(currentCategory)&&!isFavorite(x))continue;
-            if("new".equals(currentCategory)&&!isNew(x))continue;
-            if(currentCategory.startsWith("year:")&&!currentCategory.substring(5).equals(x.year))continue;
-            if(currentCategory.startsWith("cat:")&&!currentCategory.substring(4).equals(x.categoryId))continue;
-            if(!q.isEmpty()){
-                String hay=(x.title+" "+x.year+" "+x.genres+" "+x.description+" "+x.categoryName+" "+x.director+" "+x.cast).toLowerCase(Locale.ROOT);
-                if(!hay.contains(q))continue;
+        final int generation=++gridRenderVersion;
+        final String tab=currentTab,selected=currentCategory;
+        final String query=currentQuery==null?"":currentQuery.trim().toLowerCase(Locale.ROOT);
+        grid.removeAllViews();
+        displayedItems=Collections.emptyList();
+        renderedCount=0;
+        appendingGridBatch=false;
+        grid.setColumnCount(gridColumns());
+        if(contentScroll!=null)contentScroll.scrollTo(0,0);
+        contentTitle.setText(("live".equals(tab)?"Canais":("movie".equals(tab)?"Filmes":"Séries"))+(categoryLabel().isEmpty()?"":"  ·  "+categoryLabel()));
+        contentCount.setText("Carregando…");
+        showGridMessage("Preparando catálogo…");
+        io.execute(()->{
+            List<ContentItem> source;
+            synchronized(CatalogStore.class){source=new ArrayList<>(CatalogStore.list(tab));}
+            SharedPreferences favorites=getSharedPreferences("marcin_favorites",MODE_PRIVATE);
+            List<ContentItem> items=new ArrayList<>();
+            for(ContentItem item:source){
+                if("favorites".equals(selected)&&!favorites.getBoolean(item.key(),false))continue;
+                if("new".equals(selected)&&!isNew(item))continue;
+                if(selected.startsWith("year:")&&!selected.substring(5).equals(item.year))continue;
+                if(selected.startsWith("cat:")&&!selected.substring(4).equals(item.categoryId))continue;
+                if(!query.isEmpty()){
+                    String hay=(item.title+" "+item.year+" "+item.genres+" "+item.description+" "+item.categoryName+" "+item.director+" "+item.cast).toLowerCase(Locale.ROOT);
+                    if(!hay.contains(query))continue;
+                }
+                items.add(item);
             }
-            items.add(x);
+            if("new".equals(selected))items.sort((a,b)->Long.compare(parseAdded(b.added),parseAdded(a.added)));
+            else items.sort((a,b)->a.title.compareToIgnoreCase(b.title));
+            final List<ContentItem> result=items;
+            final boolean sourceWasEmpty=source.isEmpty();
+            runOnUiThread(()->{
+                if(isFinishing()||isDestroyed()||generation!=gridRenderVersion
+                        ||!tab.equals(currentTab)||!selected.equals(currentCategory))return;
+                displayedItems=result;
+                contentCount.setText(result.size()+" itens");
+                grid.removeAllViews();
+                if(result.isEmpty()){
+                    showGridMessage(sourceWasEmpty?"Nenhum conteúdo carregado. Entre com uma conta Xtream Codes ou atualize o catálogo.":"Nada encontrado nesta categoria.");
+                    return;
+                }
+                appendGridBatch(generation);
+            });
+        });
+    }
+
+    private void showGridMessage(String message){
+        if(grid==null)return;
+        grid.removeAllViews();
+        TextView empty=text(message,18);
+        empty.setTextColor(muted);empty.setGravity(Gravity.CENTER);
+        GridLayout.LayoutParams p=new GridLayout.LayoutParams();
+        p.width=-1;p.height=dp(170);p.columnSpec=GridLayout.spec(0,gridColumns());
+        grid.addView(empty,p);
+    }
+
+    private void appendGridBatch(int generation){
+        if(grid==null||appendingGridBatch||generation!=gridRenderVersion
+                ||renderedCount>=displayedItems.size())return;
+        appendingGridBatch=true;
+        int end=Math.min(displayedItems.size(),renderedCount+GRID_BATCH_SIZE);
+        while(renderedCount<end){
+            ContentItem item=displayedItems.get(renderedCount++);
+            grid.addView(card(item));
         }
-        if("new".equals(currentCategory))items.sort((a,b)->Long.compare(parseAdded(b.added),parseAdded(a.added)));
-        else items.sort((a,b)->a.title.compareToIgnoreCase(b.title));
-        contentTitle.setText(( "live".equals(currentTab)?"Canais":("movie".equals(currentTab)?"Filmes":"Séries"))+(categoryLabel().isEmpty()?"":"  ·  "+categoryLabel()));
-        contentCount.setText(items.size()+" itens");
-        if(items.isEmpty()){
-            TextView empty=text(source.isEmpty()?"Nenhum conteúdo carregado. Entre com uma conta Xtream Codes ou atualize o catálogo.":"Nada encontrado nesta categoria.",18);
-            empty.setTextColor(muted);empty.setGravity(Gravity.CENTER);GridLayout.LayoutParams p=new GridLayout.LayoutParams();p.width=-1;p.height=dp(170);p.columnSpec=GridLayout.spec(0,gridColumns());grid.addView(empty,p);return;
-        }
-        for(ContentItem x:items)grid.addView(card(x));
+        appendingGridBatch=false;
     }
     private String categoryLabel(){
         if("all".equals(currentCategory))return "";
