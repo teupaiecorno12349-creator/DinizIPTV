@@ -154,6 +154,7 @@ public class PlaybackActivity extends Activity {
                     if(duration>0&&duration!=C.TIME_UNSET){
                         long target=duration*progress/1000L;
                         timeText.setText(formatTime(target)+" / "+formatTime(duration)+"  •  Restam "+formatTime(Math.max(0,duration-target)));
+                        if(player.isCurrentMediaItemSeekable())player.seekTo(target);
                     }
                 }
             }
@@ -413,6 +414,10 @@ public class PlaybackActivity extends Activity {
         if(event.getAction()==KeyEvent.ACTION_DOWN&&key==KeyEvent.KEYCODE_DPAD_UP
                 &&nextEpisodeButton!=null&&nextEpisodeButton.hasFocus()){
             timeBar.requestFocus();showOverlay();return true;
+        }
+        if(event.getAction()==KeyEvent.ACTION_DOWN&&key==KeyEvent.KEYCODE_DPAD_UP
+                &&timeBar!=null&&timeBar.hasFocus()){
+            playerRoot.requestFocus();return true;
         }
         if(event.getAction()==KeyEvent.ACTION_DOWN&&key==KeyEvent.KEYCODE_DPAD_UP
                 &&playerRoot!=null&&playerRoot.hasFocus()){
