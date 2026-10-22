@@ -111,6 +111,11 @@ public class DetailActivity extends Activity {
         });
     }
 
+    @Override public void onUserInteraction(){
+        super.onUserInteraction();
+        CatalogRefreshScheduler.onUserActivity(this);
+    }
+
     @Override protected void onDestroy(){
         metadataExecutor.shutdownNow();
         super.onDestroy();
