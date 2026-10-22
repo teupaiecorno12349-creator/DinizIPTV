@@ -1,9 +1,20 @@
 pluginManagement {
-    repositories { google(); mavenCentral(); gradlePluginPortal() }
+    repositories {
+        google()
+        // Maven Central mirror fallback: avoids single-endpoint HTTP 403/rate-limit failures on clean CI runners.
+        maven { url = uri("https://maven-central.storage-download.googleapis.com/maven2/") }
+        mavenCentral()
+        gradlePluginPortal()
+    }
 }
 dependencyResolutionManagement {
     repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
-    repositories { google(); mavenCentral() }
+    repositories {
+        google()
+        // Use the mirror before the canonical endpoint so metadata and image/player dependencies resolve reliably.
+        maven { url = uri("https://maven-central.storage-download.googleapis.com/maven2/") }
+        mavenCentral()
+    }
 }
 rootProject.name = 'DinizIPTV'
 include ':player', ':admin'
