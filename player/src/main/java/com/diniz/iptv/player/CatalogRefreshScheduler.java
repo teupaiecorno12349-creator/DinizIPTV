@@ -35,7 +35,7 @@ public final class CatalogRefreshScheduler {
         long last=CatalogSync.lastFullRefresh(c);
         long age=last==0?Long.MAX_VALUE:System.currentTimeMillis()-last;
         if(age>=IDLE_MS){
-            WorkManager.getInstance(c).enqueueUniqueWork(WORK_NAME,ExistingWorkPolicy.REPLACE,request(0));
+            scheduleImmediateOnce(c);
         }else scheduleIdle(c);
     }
     public static void onUserActivity(Context context){
@@ -44,9 +44,19 @@ public final class CatalogRefreshScheduler {
         long last=CatalogSync.lastFullRefresh(c);
         long age=last==0?Long.MAX_VALUE:System.currentTimeMillis()-last;
         if(age>=IDLE_MS){
-            WorkManager.getInstance(c).enqueueUniqueWork(WORK_NAME,ExistingWorkPolicy.REPLACE,request(0));
+            scheduleImmediateOnce(c);
         }else scheduleIdle(c);
     }
+    private static void scheduleImmediateOnce(Context c){
+        SharedPreferences prefs=c.getSharedPreferences("marcin_catalog_state",Context.MODE_PRIVATE);
+        long now=System.currentTimeMillis();
+        long lastRequest=prefs.getLong("immediate_refresh_request_at",0L);
+        // Avoid cancelling/recreating an already queued refresh for every remote key event.
+        if(now-lastRequest<10L*60L*1000L)return;
+        prefs.edit().putLong("immediate_refresh_request_at",now).apply();
+        WorkManager.getInstance(c).enqueueUniqueWork(WORK_NAME,ExistingWorkPolicy.REPLACE,request(0));
+    }
+
     private static void scheduleIdle(Context c){
         WorkManager.getInstance(c).enqueueUniqueWork(WORK_NAME,ExistingWorkPolicy.REPLACE,request(IDLE_MS));
     }
