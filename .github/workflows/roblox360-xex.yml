@@ -90,6 +90,27 @@ jobs:
           fi
           "$TC/bin/powerpc-xsdk-elf-gcc" --version | head -1
 
+      - name: Construir glslang para compilação dos shaders
+        shell: bash
+        run: |
+          set -euo pipefail
+          GLSLANG_SHA="d2f00185cf5feaa449f6e15c1894fb232b2b6bcd"
+          mkdir -p "$HOME/glslang-xenon"
+          cd "$HOME/glslang-xenon"
+          git init -q
+          git remote add origin https://github.com/xenosworks/glslang-xenon.git
+          git fetch -q --depth 1 origin "$GLSLANG_SHA"
+          git checkout -q FETCH_HEAD
+          test "$(git rev-parse HEAD)" = "$GLSLANG_SHA"
+          python3 update_glslang_sources.py
+          cmake -S "$HOME/glslang-xenon" -B "$HOME/glslang-xenon/build" -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release -DENABLE_OPT=ON \
+            -DSPIRV_SKIP_EXECUTABLES=ON -DGLSLANG_TESTS=OFF
+          cmake --build "$HOME/glslang-xenon/build" --parallel "$(nproc)"
+          test -x "$HOME/glslang-xenon/build/StandAlone/glslang"
+          install -m 0755 "$HOME/glslang-xenon/build/StandAlone/glslang" "$HOME/xsdk-gcc/bin/glslang"
+          "$HOME/xsdk-gcc/bin/glslang" --version | head -4
+
       - name: Construir bibliotecas do XSDK
         run: |
           cd "$HOME/xsdk"
