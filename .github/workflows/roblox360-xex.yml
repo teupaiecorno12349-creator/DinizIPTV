@@ -17,7 +17,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  XSDK_SHA: 49307c7b5fe6cc0e262da7b31af58e4e309aa18e
+  XSDK_SHA: 57b02f1e60667e37d22c3aa613d23d2486514ff8
 
 jobs:
   build-xex:
