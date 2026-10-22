@@ -173,7 +173,7 @@ public class MainActivity extends Activity {
         contentScroll=new ScrollView(this);contentScroll.setFillViewport(false);contentScroll.setVerticalScrollBarEnabled(false);contentArea.addView(contentScroll,new LinearLayout.LayoutParams(-1,0,1));
         grid=new GridLayout(this);grid.setColumnCount(gridColumns());grid.setUseDefaultMargins(false);contentScroll.addView(grid);
         contentScroll.setOnScrollChangeListener((View v,int sx,int sy,int oldSx,int oldSy)->{
-            if(contentScroll!=null&&grid!=null&&sy+contentScroll.getHeight()>=grid.getHeight()-dp(650))
+            if(contentScroll!=null&&grid!=null&&sy+contentScroll.getHeight()>=grid.getHeight()-dp(220))
                 appendGridBatch(gridRenderVersion);
         });
         searchField.setOnEditorActionListener((v,id,event)->{if(id==EditorInfo.IME_ACTION_SEARCH||(event!=null&&event.getKeyCode()==KeyEvent.KEYCODE_ENTER)){currentQuery=searchField.getText().toString().trim();renderGrid();return true;}return false;});
