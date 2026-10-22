@@ -20,7 +20,7 @@ concurrency:
 
 jobs:
   build-player-apk:
-    name: Compile Marcin IPTV TV Box APK
+    name: Compile Marcin IPTV TV Box APK (metadata cache optimization)
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
