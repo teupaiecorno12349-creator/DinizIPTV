@@ -33,7 +33,10 @@ public class MainActivity extends Activity {
     private EditText serverField,userField,passwordField,searchField;
     private TextView statusView,contentTitle,contentCount,loadingTitle,loadingMessage;
     private ProgressBar loadingBar;
-    private String currentTab="live",currentCategory="all",currentQuery="";
+    private String currentTab="none",currentCategory="all",currentQuery="";
+    private Button refreshButton;
+    private TextView footerHint;
+    private long lastRenderedCatalogRefresh=0L;
     private CatalogLoader loader;
     private XtreamClient api;
     private int accent=Color.rgb(79,130,255),bgColor=Color.rgb(7,10,16),panel=Color.rgb(17,24,35),muted=Color.rgb(160,172,191);
@@ -42,9 +45,11 @@ public class MainActivity extends Activity {
     @Override public void onCreate(Bundle state){
         super.onCreate(state);
         immersive();
+        CatalogRefreshScheduler.onAppLaunched(this);
         account=getSharedPreferences(ACCOUNT,MODE_PRIVATE);
         NetworkStack.apply(this,NetworkStack.mode(this));
         boolean hasCache=CatalogStore.load(this);
+        lastRenderedCatalogRefresh=getSharedPreferences("marcin_catalog_state",MODE_PRIVATE).getLong("last_successful_sync",0L);
         String savedBase=account.getString("server",""),savedUser=account.getString("username",""),savedPass=account.getString("password","");
         if(hasCache&&!savedBase.isEmpty()&&!savedUser.isEmpty()&&!savedPass.isEmpty()){
             api=new XtreamClient(this,savedBase,savedUser,savedPass);
@@ -155,9 +160,9 @@ public class MainActivity extends Activity {
         LinearLayout branding=new LinearLayout(this);branding.setOrientation(LinearLayout.VERTICAL);branding.setGravity(Gravity.CENTER_VERTICAL);header.addView(branding,new LinearLayout.LayoutParams(dp(205),-1));
         TextView logo=text("MARCIN IPTV",23);logo.setTextColor(accent);logo.setTypeface(Typeface.DEFAULT_BOLD);branding.addView(logo);
         TextView strap=text("XTREAM PLAYER",10);strap.setTextColor(muted);branding.addView(strap);
-        addTab(header,"CANAIS","live");addTab(header,"FILMES","movie");addTab(header,"SÉRIES","series");
+        addTab(header,"📺  CANAIS","live");addTab(header,"🎬  FILMES","movie");addTab(header,"📚  SÉRIES","series");
         View flex=new View(this);header.addView(flex,new LinearLayout.LayoutParams(0,1,1));
-        searchField=new EditText(this);searchField.setSingleLine(true);searchField.setTextSize(16);searchField.setTextColor(Color.WHITE);searchField.setHintTextColor(muted);searchField.setHint("⌕  Buscar nesta aba…");searchField.setPadding(dp(14),0,dp(14),0);searchField.setBackground(rounded(panel,10));
+        searchField=new EditText(this);searchField.setSingleLine(true);searchField.setImeOptions(EditorInfo.IME_ACTION_SEARCH);searchField.setTextSize(16);searchField.setTextColor(Color.WHITE);searchField.setHintTextColor(muted);searchField.setHint("⌕  Buscar nesta aba…");searchField.setPadding(dp(14),0,dp(14),0);searchField.setBackground(rounded(panel,10));
         LinearLayout.LayoutParams sp=new LinearLayout.LayoutParams(dp(280),dp(48));sp.setMargins(dp(8),0,dp(8),0);header.addView(searchField,sp);
         Button search=button("⌕",23);header.addView(search,new LinearLayout.LayoutParams(dp(54),dp(48)));search.setOnClickListener(v->{currentQuery=searchField.getText().toString().trim();renderGrid();});
         Button gear=button("⚙",23);LinearLayout.LayoutParams gp=new LinearLayout.LayoutParams(dp(54),dp(48));gp.setMargins(dp(8),0,0,0);header.addView(gear,gp);gear.setContentDescription("Configurações");gear.setOnClickListener(v->openSettings());
@@ -176,16 +181,52 @@ public class MainActivity extends Activity {
             if(contentScroll!=null&&grid!=null&&sy+contentScroll.getHeight()>=grid.getHeight()-dp(220))
                 appendGridBatch(gridRenderVersion);
         });
-        searchField.setOnEditorActionListener((v,id,event)->{if(id==EditorInfo.IME_ACTION_SEARCH||(event!=null&&event.getKeyCode()==KeyEvent.KEYCODE_ENTER)){currentQuery=searchField.getText().toString().trim();renderGrid();return true;}return false;});
-        currentCategory="all";renderGrid();renderCategories();setContentView(root);
+        searchField.setOnEditorActionListener((v,id,event)->{
+            boolean enter=id==EditorInfo.IME_ACTION_SEARCH||id==EditorInfo.IME_ACTION_DONE||id==EditorInfo.IME_ACTION_GO
+                    ||(event!=null&&event.getKeyCode()==KeyEvent.KEYCODE_ENTER);
+            if(enter){currentQuery=searchField.getText().toString().trim();renderGrid();return true;}
+            return false;
+        });
+        searchField.setOnKeyListener((v,keyCode,event)->{
+            if((keyCode==KeyEvent.KEYCODE_ENTER||keyCode==KeyEvent.KEYCODE_NUMPAD_ENTER||keyCode==KeyEvent.KEYCODE_DPAD_CENTER)
+                    &&event.getAction()==KeyEvent.ACTION_UP){
+                currentQuery=searchField.getText().toString().trim();renderGrid();return true;
+            }
+            return false;
+        });
+        currentCategory="all";
+        LinearLayout footer=new LinearLayout(this);
+        footer.setGravity(Gravity.CENTER_VERTICAL);
+        footer.setPadding(dp(4),dp(5),dp(4),0);
+        footerHint=text("Escolha Canais, Filmes ou Séries para abrir a biblioteca.",12);
+        footerHint.setTextColor(muted);
+        footer.addView(footerHint,new LinearLayout.LayoutParams(0,-2,1));
+        refreshButton=button("↻  ATUALIZAR ABA",14);
+        LinearLayout.LayoutParams refreshParams=new LinearLayout.LayoutParams(dp(205),dp(42));
+        refreshParams.setMargins(dp(8),0,0,0);
+        footer.addView(refreshButton,refreshParams);
+        refreshButton.setOnClickListener(v->refreshCurrentTab());
+        root.addView(footer,new LinearLayout.LayoutParams(-1,dp(50)));
+        updateFooter();
+        renderGrid();renderCategories();setContentView(root);
+        lastRenderedCatalogRefresh=getSharedPreferences("marcin_catalog_state",MODE_PRIVATE).getLong("last_successful_sync",lastRenderedCatalogRefresh);
         // Reapply after setContentView, since this can reset focus on some Android TV launchers.
         immersive();
     }
 
     private void addTab(LinearLayout header,String name,String type){
-        Button b=button(name,15);LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(dp(100),dp(46));lp.setMargins(dp(3),0,dp(3),0);header.addView(b,lp);
-        b.setOnClickListener(v->{if(!currentTab.equals(type)){currentTab=type;currentCategory="all";currentQuery=searchField==null?"":searchField.getText().toString().trim();renderGrid();renderCategories();}});
-        focusStyle(b,currentTab.equals(type)?Color.rgb(36,55,88):panel,accent);
+        Button b=button(name,14);
+        LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(dp(116),dp(46));
+        lp.setMargins(dp(3),0,dp(3),0);header.addView(b,lp);
+        int tint="live".equals(type)?Color.rgb(14,82,88):("movie".equals(type)?Color.rgb(104,61,27):Color.rgb(73,43,119));
+        b.setOnClickListener(v->{
+            if(!currentTab.equals(type)){
+                currentTab=type;currentCategory="all";
+                currentQuery=searchField==null?"":searchField.getText().toString().trim();
+                renderGrid();renderCategories();updateFooter();
+            }
+        });
+        focusStyle(b,currentTab.equals(type)?Color.rgb(36,55,88):tint,accent);
     }
     private int gridColumns(){int w=getResources().getConfiguration().screenWidthDp;return Math.max(3,Math.min(6,(w-290)/205));}
 
@@ -198,6 +239,7 @@ public class MainActivity extends Activity {
 
     private void renderCategories(){
         if(categoryList==null)return;
+        if("none".equals(currentTab)){categoryList.removeAllViews();return;}
         final int generation=++categoryRenderVersion;
         final String tab=currentTab,selected=currentCategory;
         io.execute(()->{
@@ -305,6 +347,14 @@ public class MainActivity extends Activity {
         if(grid==null)return;
         final int generation=++gridRenderVersion;
         final String tab=currentTab,selected=currentCategory;
+        if("none".equals(tab)){
+            displayedItems=Collections.emptyList();renderedCount=0;appendingGridBatch=false;
+            contentTitle.setText("Escolha uma seção");
+            contentCount.setText("");
+            showGridMessage("Selecione Canais, Filmes ou Séries acima para carregar essa lista.");
+            if(contentScroll!=null)contentScroll.scrollTo(0,0);
+            return;
+        }
         final String query=currentQuery==null?"":currentQuery.trim().toLowerCase(Locale.ROOT);
         grid.removeAllViews();
         displayedItems=Collections.emptyList();
@@ -408,6 +458,66 @@ public class MainActivity extends Activity {
     }
     private void playItem(ContentItem item){
         Intent i=new Intent(this,PlaybackActivity.class);i.putExtra("url",item.streamUrl);i.putExtra("title",item.displayTitle());i.putExtra("content_type",item.type);startActivity(i);
+    }
+
+    private void updateFooter(){
+        if(refreshButton==null||footerHint==null)return;
+        boolean selected=!"none".equals(currentTab);
+        refreshButton.setEnabled(selected);
+        refreshButton.setAlpha(selected?1f:0.5f);
+        String tabName="live".equals(currentTab)?"Canais":("movie".equals(currentTab)?"Filmes":("series".equals(currentTab)?"Séries":"nenhuma aba"));
+        footerHint.setText(selected?"Aba atual: "+tabName+" · Atualização manual apenas desta aba.":"Escolha Canais, Filmes ou Séries para abrir a biblioteca.");
+    }
+
+    private void refreshCurrentTab(){
+        if("none".equals(currentTab)){
+            Toast.makeText(this,"Primeiro escolha Canais, Filmes ou Séries.",Toast.LENGTH_SHORT).show();return;
+        }
+        String tab=currentTab;
+        String server=account.getString("server",""),user=account.getString("username",""),pass=account.getString("password","");
+        if(server.isEmpty()||user.isEmpty()||pass.isEmpty()){
+            Toast.makeText(this,"Entre com sua conta Xtream Codes.",Toast.LENGTH_LONG).show();return;
+        }
+        if(refreshButton!=null){refreshButton.setEnabled(false);refreshButton.setText("ATUALIZANDO…");}
+        if(footerHint!=null)footerHint.setText("Atualizando apenas "+("live".equals(tab)?"Canais":("movie".equals(tab)?"Filmes":"Séries"))+"…");
+        io.execute(()->{
+            try{
+                CatalogSync.refreshTab(MainActivity.this,new XtreamClient(MainActivity.this,server,user,pass),tab);
+                runOnUiThread(()->{
+                    if(isFinishing()||isDestroyed())return;
+                    if(refreshButton!=null){refreshButton.setEnabled(true);refreshButton.setText("↻  ATUALIZAR ABA");}
+                    if(tab.equals(currentTab)){renderCategories();renderGrid();}
+                    updateFooter();
+                    Toast.makeText(MainActivity.this,"Aba atualizada com sucesso.",Toast.LENGTH_SHORT).show();
+                });
+            }catch(Exception error){
+                runOnUiThread(()->{
+                    if(isFinishing()||isDestroyed())return;
+                    if(refreshButton!=null){refreshButton.setEnabled(true);refreshButton.setText("↻  ATUALIZAR ABA");}
+                    updateFooter();
+                    Toast.makeText(MainActivity.this,"Não foi possível atualizar essa aba agora.",Toast.LENGTH_LONG).show();
+                });
+            }
+        });
+    }
+
+    private void refreshUiIfCatalogChanged(){
+        long latest=getSharedPreferences("marcin_catalog_state",MODE_PRIVATE).getLong("last_successful_sync",0L);
+        if(latest<=lastRenderedCatalogRefresh)return;
+        lastRenderedCatalogRefresh=latest;
+        CatalogStore.load(this);
+        if(root!=null){renderCategories();renderGrid();}
+    }
+
+    @Override protected void onResume(){
+        super.onResume();
+        refreshUiIfCatalogChanged();
+    }
+
+    @Override public void onUserInteraction(){
+        super.onUserInteraction();
+        CatalogRefreshScheduler.onUserActivity(this);
+        refreshUiIfCatalogChanged();
     }
 
     private void openSettings(){Intent i=new Intent(this,SettingsActivity.class);startActivityForResult(i,REQ_SETTINGS);}
