@@ -347,7 +347,9 @@ int main(void){
  st=xsdk_present_open(XSDK_DISPLAY_720P,2,1,&width,&height);
  if(!NT_SUCCESS(st)){
   xsdk_log_write("natural_disaster: display open 0x%08X",(unsigned)st);
-  if(text_ready)xsdk_text_close();xsdk_shader_free(&ps);xsdk_shader_free(&vs);
+  if(text_ready) xsdk_text_close();
+  xsdk_shader_free(&ps);
+  xsdk_shader_free(&vs);
   xsdk_gpu_free(gpu_vertices);xsdk_gpu_close();return 1;
  }
  float px=0.0f,py=0.0f,pz=0.0f,camera_yaw=0.0f,camera_pitch=0.32f,facing=0.0f,jv=0.0f;
