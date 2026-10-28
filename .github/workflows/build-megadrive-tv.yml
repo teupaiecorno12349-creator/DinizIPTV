@@ -46,6 +46,11 @@ jobs:
           PY
           tar -xJf "$RUNNER_TEMP/megadrivetv-source.tar.xz"
           test -f MegaDriveTV/app/src/main/java/com/diniz/megadrivetv/MainActivity.kt
+          # Junrar 8.x renamed FileHeader.getFileNameString() to getFileName().
+          game_library="MegaDriveTV/app/src/main/java/com/diniz/megadrivetv/library/GameLibrary.kt"
+          grep -q 'fileNameString' "$game_library"
+          sed -i 's/fileNameString/fileName/g' "$game_library"
+          ! grep -q 'fileNameString' "$game_library"
 
       - name: Set up Java 17
         uses: actions/setup-java@v4
