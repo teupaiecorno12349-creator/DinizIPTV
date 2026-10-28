@@ -59,17 +59,17 @@ jobs:
           from pathlib import Path
           source = Path("MegaDriveTV/app/src/main/cpp/native-lib.cpp")
           text = source.read_text()
-          duplicate = """        case RETRO_ENVIRONMENT_GET_CONTENT_DIRECTORY: {
-            if (!data) return false;
-            *static_cast<const char **>(data) = g_system_dir.c_str();
-            return true;
-        }
-          """
-          if text.count("case RETRO_ENVIRONMENT_GET_CONTENT_DIRECTORY:") != 1:
-              raise SystemExit("Expected exactly one deprecated content-directory case")
-          if duplicate not in text:
-              raise SystemExit("Duplicate content-directory block did not match source")
-          source.write_text(text.replace(duplicate, "", 1))
+          import re
+          from pathlib import Path
+          source = Path("MegaDriveTV/app/src/main/cpp/native-lib.cpp")
+          cpp = source.read_text()
+          pattern = r"(?m)^[ \t]*case RETRO_ENVIRONMENT_GET_CONTENT_DIRECTORY:[ \t]*\{\n.*?^[ \t]*\}"
+          updated, count = re.subn(pattern, "", cpp, count=1, flags=re.DOTALL)
+          if count != 1:
+              raise SystemExit(f"Expected one deprecated alias case, removed {count}")
+          if "case RETRO_ENVIRONMENT_GET_CONTENT_DIRECTORY:" in updated:
+              raise SystemExit("Deprecated alias case remains after patch")
+          source.write_text(updated)
           print("Removed duplicate Libretro environment enum case")
           PY
 
