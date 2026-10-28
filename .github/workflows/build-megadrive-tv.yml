@@ -25,20 +25,23 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Restore and verify source archive
+        shell: bash
         run: |
+          set -euo pipefail
           cat payload/chunk*.b64 > "$RUNNER_TEMP/megadrivetv-source.b64"
           python3 - <<'PY'
           import base64
           import hashlib
           from pathlib import Path
 
-          encoded = Path("${{ runner.temp }}/megadrivetv-source.b64").read_bytes()
+          temp = Path("${{ runner.temp }}")
+          encoded = (temp / "megadrivetv-source.b64").read_bytes()
           archive = base64.b64decode(encoded, validate=True)
           digest = hashlib.sha256(archive).hexdigest()
           expected = "d30361c7dbb3c9ca9df50c3ecf1d7a47bde45527febce0e51d069fc4ca5194ec"
           if digest != expected:
               raise SystemExit(f"Source archive checksum mismatch: {digest}")
-          Path("${{ runner.temp }}/megadrivetv-source.tar.xz").write_bytes(archive)
+          (temp / "megadrivetv-source.tar.xz").write_bytes(archive)
           print(f"Verified source archive SHA-256: {digest}")
           PY
           tar -xJf "$RUNNER_TEMP/megadrivetv-source.tar.xz"
@@ -79,6 +82,7 @@ jobs:
         run: |
           set -euxo pipefail
           mkdir -p app/src/main/jniLibs/arm64-v8a app/src/main/jniLibs/armeabi-v7a licenses
+
           curl -fL --retry 3 --retry-delay 2 \
             "https://buildbot.libretro.com/nightly/android/latest/arm64-v8a/blastem_libretro_android.so.zip" \
             -o "$RUNNER_TEMP/blastem-arm64.zip"
@@ -90,35 +94,17 @@ jobs:
             local archive="$1"
             local destination="$2"
             local entry
-            entry="$(unzip -Z1 "$archive" | grep -E '(^|/)blastem_libretro_android\.so
-
-      - name: Build debug APK
-        working-directory: MegaDriveTV
-        run: ./gradlew --no-daemon --stacktrace assembleDebug
-
-      - name: Upload installable APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: MegaDriveTV-debug-APK
-          path: MegaDriveTV/app/build/outputs/apk/debug/app-debug.apk
-          if-no-files-found: error
-          retention-days: 30
-
-      - name: Build summary
-        if: success()
-        run: |
-          echo "## Mega Drive TV APK" >> "$GITHUB_STEP_SUMMARY"
-          echo "Build concluído para armeabi-v7a e arm64-v8a." >> "$GITHUB_STEP_SUMMARY"
-          echo "Baixe o artefato **MegaDriveTV-debug-APK** na aba Actions." >> "$GITHUB_STEP_SUMMARY"
- | head -n 1)"
+            entry="$(unzip -Z1 "$archive" | grep -E '(^|/)blastem_libretro_android\.so$' | head -n 1)"
             test -n "$entry"
             unzip -p "$archive" "$entry" > "$destination"
             test -s "$destination"
-            file "$destination"
           }
 
           extract_core "$RUNNER_TEMP/blastem-arm64.zip" app/src/main/jniLibs/arm64-v8a/libblastem.so
           extract_core "$RUNNER_TEMP/blastem-armv7.zip" app/src/main/jniLibs/armeabi-v7a/libblastem.so
+
+          readelf -h app/src/main/jniLibs/arm64-v8a/libblastem.so | grep -q 'Machine:.*AArch64'
+          readelf -h app/src/main/jniLibs/armeabi-v7a/libblastem.so | grep -q 'Machine:.*ARM'
 
           curl -fL --retry 3 \
             "https://raw.githubusercontent.com/libretro/blastem/$BLASTEM_COMMIT/COPYING" \
