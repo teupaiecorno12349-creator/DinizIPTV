@@ -4,9 +4,7 @@ on:
   push:
     branches: [megadrive-tv]
     paths:
-      - 'MegaDriveTV-source.tar.xz.b64'
-      - 'MegaDriveTV-source-part2.b64'
-      - 'MegaDriveTV-source-part3.b64'
+      - 'payload/**'
       - '.github/workflows/build-megadrive-tv.yml'
   workflow_dispatch:
 
@@ -26,54 +24,24 @@ jobs:
       - name: Checkout source
         uses: actions/checkout@v4
 
-      - name: Recover and extract app source
+      - name: Restore and verify source archive
         run: |
+          cat payload/chunk*.b64 > "$RUNNER_TEMP/megadrivetv-source.b64"
           python3 - <<'PY'
           import base64
-          import io
-          import lzma
-          import pathlib
-          import tarfile
+          import hashlib
+          from pathlib import Path
 
-          root = pathlib.Path(".")
-          p1 = (root / "MegaDriveTV-source.tar.xz.b64").read_text().strip()
-          p2 = (root / "MegaDriveTV-source-part2.b64").read_text().strip()
-          p3 = (root / "MegaDriveTV-source-part3.b64").read_text().strip()
-          archive = None
-          recovered_at = None
-
-          # The second chunk was copied through a text-only API and may contain
-          # one accidental extra character. Identify the exact correction by
-          # verifying the complete XZ checksum and expected project path.
-          if len(p1) + len(p2) + len(p3) == 39960:
-              candidates = [p1 + p2 + p3]
-          elif len(p1) == 24000 and len(p2) == 8001 and len(p3) == 7960:
-              candidates = (p1 + p2[:i] + p2[i + 1:] + p3 for i in range(len(p2)))
-          else:
-              raise RuntimeError(
-                  f"Unexpected source chunk sizes: {len(p1)}, {len(p2)}, {len(p3)}"
-              )
-
-          for candidate in candidates:
-              try:
-                  raw = base64.b64decode(candidate, validate=True)
-                  unpacked = lzma.decompress(raw, format=lzma.FORMAT_XZ, memlimit=256 * 1024 * 1024)
-                  with tarfile.open(fileobj=io.BytesIO(unpacked), mode="r:") as tf:
-                      names = tf.getnames()
-                      if not any(name.endswith("MegaDriveTV/app/src/main/java/com/diniz/megadrivetv/MainActivity.kt") for name in names):
-                          continue
-                  archive = raw
-                  break
-              except Exception:
-                  continue
-
-          if archive is None:
-              raise RuntimeError("The source archive did not pass XZ integrity and project checks")
-
-          (root / "MegaDriveTV-source.tar.xz").write_bytes(archive)
-          print("Source archive integrity verified")
+          encoded = Path("${{ runner.temp }}/megadrivetv-source.b64").read_bytes()
+          archive = base64.b64decode(encoded, validate=True)
+          digest = hashlib.sha256(archive).hexdigest()
+          expected = "d30361c7dbb3c9ca9df50c3ecf1d7a47bde45527febce0e51d069fc4ca5194ec"
+          if digest != expected:
+              raise SystemExit(f"Source archive checksum mismatch: {digest}")
+          Path("${{ runner.temp }}/megadrivetv-source.tar.xz").write_bytes(archive)
+          print(f"Verified source archive SHA-256: {digest}")
           PY
-          tar -xJf MegaDriveTV-source.tar.xz
+          tar -xJf "$RUNNER_TEMP/megadrivetv-source.tar.xz"
           test -f MegaDriveTV/app/src/main/java/com/diniz/megadrivetv/MainActivity.kt
 
       - name: Set up Java 17
@@ -123,6 +91,7 @@ jobs:
           test -s "$RUNNER_TEMP/blastem/libblastem.so"
           cp "$RUNNER_TEMP/blastem/libblastem.so" app/src/main/jniLibs/armeabi-v7a/libblastem.so
 
+          mkdir -p licenses
           cp "$RUNNER_TEMP/blastem/COPYING" licenses/BLASTEM-COPYING.txt
 
       - name: Build debug APK
