@@ -73,39 +73,64 @@ jobs:
           mkdir -p app/src/main/cpp/include
           cp "$RUNNER_TEMP/libretro-common/include/libretro.h" app/src/main/cpp/include/libretro.h
 
-      - name: Prepare BlastEm source
-        run: |
-          set -euxo pipefail
-          git clone --quiet https://github.com/libretro/blastem.git "$RUNNER_TEMP/blastem"
-          git -C "$RUNNER_TEMP/blastem" checkout "$BLASTEM_COMMIT"
-
-      - name: Build BlastEm core (ARM64)
+      - name: Package official BlastEm Android cores
         working-directory: MegaDriveTV
         shell: bash
         run: |
           set -euxo pipefail
-          mkdir -p app/src/main/jniLibs/arm64-v8a app/src/main/jniLibs/armeabi-v7a
-          NDK_LLVM="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64"
-          time make -C "$RUNNER_TEMP/blastem" -j2 -f Makefile.libretro \
-            platform=android-arm64 ANDROID_NDK_LLVM="$NDK_LLVM" ANDROID_API=26 NOLTO=1
-          test -s "$RUNNER_TEMP/blastem/libblastem.so"
-          cp "$RUNNER_TEMP/blastem/libblastem.so" app/src/main/jniLibs/arm64-v8a/libblastem.so
+          mkdir -p app/src/main/jniLibs/arm64-v8a app/src/main/jniLibs/armeabi-v7a licenses
+          curl -fL --retry 3 --retry-delay 2 \
+            "https://buildbot.libretro.com/nightly/android/latest/arm64-v8a/blastem_libretro_android.so.zip" \
+            -o "$RUNNER_TEMP/blastem-arm64.zip"
+          curl -fL --retry 3 --retry-delay 2 \
+            "https://buildbot.libretro.com/nightly/android/latest/armeabi-v7a/blastem_libretro_android.so.zip" \
+            -o "$RUNNER_TEMP/blastem-armv7.zip"
 
-      - name: Clean BlastEm objects between ABIs
-        run: make -C "$RUNNER_TEMP/blastem" -f Makefile.libretro clean
+          extract_core() {
+            local archive="$1"
+            local destination="$2"
+            local entry
+            entry="$(unzip -Z1 "$archive" | grep -E '(^|/)blastem_libretro_android\.so
 
-      - name: Build BlastEm core (ARMv7)
+      - name: Build debug APK
         working-directory: MegaDriveTV
-        shell: bash
+        run: ./gradlew --no-daemon --stacktrace assembleDebug
+
+      - name: Upload installable APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: MegaDriveTV-debug-APK
+          path: MegaDriveTV/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Build summary
+        if: success()
         run: |
-          set -euxo pipefail
-          NDK_LLVM="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64"
-          time make -C "$RUNNER_TEMP/blastem" -j2 -f Makefile.libretro \
-            platform=android-armv7 ANDROID_NDK_LLVM="$NDK_LLVM" ANDROID_API=26 NOLTO=1
-          test -s "$RUNNER_TEMP/blastem/libblastem.so"
-          cp "$RUNNER_TEMP/blastem/libblastem.so" app/src/main/jniLibs/armeabi-v7a/libblastem.so
-          mkdir -p licenses
-          cp "$RUNNER_TEMP/blastem/COPYING" licenses/BLASTEM-COPYING.txt
+          echo "## Mega Drive TV APK" >> "$GITHUB_STEP_SUMMARY"
+          echo "Build concluído para armeabi-v7a e arm64-v8a." >> "$GITHUB_STEP_SUMMARY"
+          echo "Baixe o artefato **MegaDriveTV-debug-APK** na aba Actions." >> "$GITHUB_STEP_SUMMARY"
+ | head -n 1)"
+            test -n "$entry"
+            unzip -p "$archive" "$entry" > "$destination"
+            test -s "$destination"
+            file "$destination"
+          }
+
+          extract_core "$RUNNER_TEMP/blastem-arm64.zip" app/src/main/jniLibs/arm64-v8a/libblastem.so
+          extract_core "$RUNNER_TEMP/blastem-armv7.zip" app/src/main/jniLibs/armeabi-v7a/libblastem.so
+
+          curl -fL --retry 3 \
+            "https://raw.githubusercontent.com/libretro/blastem/$BLASTEM_COMMIT/COPYING" \
+            -o licenses/BLASTEM-COPYING.txt
+          printf '%s\n' \
+            "BlastEm source repository: https://github.com/libretro/blastem" \
+            "Source commit: $BLASTEM_COMMIT" \
+            "Android binaries: https://buildbot.libretro.com/nightly/android/latest/" \
+            "The bundled core is the unmodified Libretro BlastEm core." \
+            > licenses/BLASTEM-SOURCE.txt
+
+          sha256sum app/src/main/jniLibs/arm64-v8a/libblastem.so app/src/main/jniLibs/armeabi-v7a/libblastem.so
 
       - name: Build debug APK
         working-directory: MegaDriveTV
