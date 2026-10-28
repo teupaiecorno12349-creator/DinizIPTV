@@ -52,6 +52,27 @@ jobs:
           sed -i 's/fileNameString/fileName/g' "$game_library"
           ! grep -q 'fileNameString' "$game_library"
 
+          # libretro.h defines GET_CONTENT_DIRECTORY as an alias of
+          # GET_CORE_ASSETS_DIRECTORY (both numeric value 30). Avoid duplicate
+          # switch labels; the existing CORE_ASSETS case returns the same dir.
+          python3 - <<'PY'
+          from pathlib import Path
+          source = Path("MegaDriveTV/app/src/main/cpp/native-lib.cpp")
+          text = source.read_text()
+          duplicate = """        case RETRO_ENVIRONMENT_GET_CONTENT_DIRECTORY: {
+                    if (!data) return false;
+                    *static_cast<const char **>(data) = g_system_dir.c_str();
+                    return true;
+                }
+          """
+          if text.count("case RETRO_ENVIRONMENT_GET_CONTENT_DIRECTORY:") != 1:
+              raise SystemExit("Expected exactly one deprecated content-directory case")
+          if duplicate not in text:
+              raise SystemExit("Duplicate content-directory block did not match source")
+          source.write_text(text.replace(duplicate, "", 1))
+          print("Removed duplicate Libretro environment enum case")
+          PY
+
       - name: Set up Java 17
         uses: actions/setup-java@v4
         with:
