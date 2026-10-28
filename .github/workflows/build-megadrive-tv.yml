@@ -73,26 +73,37 @@ jobs:
           mkdir -p app/src/main/cpp/include
           cp "$RUNNER_TEMP/libretro-common/include/libretro.h" app/src/main/cpp/include/libretro.h
 
-      - name: Build BlastEm core for ARM64 and ARMv7
+      - name: Prepare BlastEm source
+        run: |
+          set -euxo pipefail
+          git clone --quiet https://github.com/libretro/blastem.git "$RUNNER_TEMP/blastem"
+          git -C "$RUNNER_TEMP/blastem" checkout "$BLASTEM_COMMIT"
+
+      - name: Build BlastEm core (ARM64)
         working-directory: MegaDriveTV
         shell: bash
         run: |
-          git clone --quiet https://github.com/libretro/blastem.git "$RUNNER_TEMP/blastem"
-          git -C "$RUNNER_TEMP/blastem" checkout "$BLASTEM_COMMIT"
+          set -euxo pipefail
           mkdir -p app/src/main/jniLibs/arm64-v8a app/src/main/jniLibs/armeabi-v7a
           NDK_LLVM="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64"
-
-          make -C "$RUNNER_TEMP/blastem" -j2 -f Makefile.libretro \
-            platform=android-arm64 ANDROID_NDK_LLVM="$NDK_LLVM" ANDROID_API=26
+          time make -C "$RUNNER_TEMP/blastem" -j2 -f Makefile.libretro \
+            platform=android-arm64 ANDROID_NDK_LLVM="$NDK_LLVM" ANDROID_API=26 NOLTO=1
           test -s "$RUNNER_TEMP/blastem/libblastem.so"
           cp "$RUNNER_TEMP/blastem/libblastem.so" app/src/main/jniLibs/arm64-v8a/libblastem.so
-          make -C "$RUNNER_TEMP/blastem" -f Makefile.libretro clean
 
-          make -C "$RUNNER_TEMP/blastem" -j2 -f Makefile.libretro \
-            platform=android-armv7 ANDROID_NDK_LLVM="$NDK_LLVM" ANDROID_API=26
+      - name: Clean BlastEm objects between ABIs
+        run: make -C "$RUNNER_TEMP/blastem" -f Makefile.libretro clean
+
+      - name: Build BlastEm core (ARMv7)
+        working-directory: MegaDriveTV
+        shell: bash
+        run: |
+          set -euxo pipefail
+          NDK_LLVM="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64"
+          time make -C "$RUNNER_TEMP/blastem" -j2 -f Makefile.libretro \
+            platform=android-armv7 ANDROID_NDK_LLVM="$NDK_LLVM" ANDROID_API=26 NOLTO=1
           test -s "$RUNNER_TEMP/blastem/libblastem.so"
           cp "$RUNNER_TEMP/blastem/libblastem.so" app/src/main/jniLibs/armeabi-v7a/libblastem.so
-
           mkdir -p licenses
           cp "$RUNNER_TEMP/blastem/COPYING" licenses/BLASTEM-COPYING.txt
 
