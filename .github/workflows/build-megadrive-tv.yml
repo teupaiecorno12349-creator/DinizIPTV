@@ -26,11 +26,53 @@ jobs:
       - name: Checkout source
         uses: actions/checkout@v4
 
-      - name: Extract app source
+      - name: Recover and extract app source
         run: |
-          cat MegaDriveTV-source.tar.xz.b64 MegaDriveTV-source-part2.b64 MegaDriveTV-source-part3.b64 > MegaDriveTV-source-complete.b64
-          test "$(wc -c < MegaDriveTV-source-complete.b64)" -eq 39960
-          base64 -d MegaDriveTV-source-complete.b64 > MegaDriveTV-source.tar.xz
+          python3 - <<'PY'
+          import base64
+          import io
+          import lzma
+          import pathlib
+          import tarfile
+
+          root = pathlib.Path(".")
+          p1 = (root / "MegaDriveTV-source.tar.xz.b64").read_text().strip()
+          p2 = (root / "MegaDriveTV-source-part2.b64").read_text().strip()
+          p3 = (root / "MegaDriveTV-source-part3.b64").read_text().strip()
+          archive = None
+          recovered_at = None
+
+          # The second chunk was copied through a text-only API and may contain
+          # one accidental extra character. Identify the exact correction by
+          # verifying the complete XZ checksum and expected project path.
+          if len(p1) + len(p2) + len(p3) == 39960:
+              candidates = [p1 + p2 + p3]
+          elif len(p1) == 24000 and len(p2) == 8001 and len(p3) == 7960:
+              candidates = (p1 + p2[:i] + p2[i + 1:] + p3 for i in range(len(p2)))
+          else:
+              raise RuntimeError(
+                  f"Unexpected source chunk sizes: {len(p1)}, {len(p2)}, {len(p3)}"
+              )
+
+          for candidate in candidates:
+              try:
+                  raw = base64.b64decode(candidate, validate=True)
+                  unpacked = lzma.decompress(raw, format=lzma.FORMAT_XZ, memlimit=256 * 1024 * 1024)
+                  with tarfile.open(fileobj=io.BytesIO(unpacked), mode="r:") as tf:
+                      names = tf.getnames()
+                      if not any(name.endswith("MegaDriveTV/app/src/main/java/com/diniz/megadrivetv/MainActivity.kt") for name in names):
+                          continue
+                  archive = raw
+                  break
+              except Exception:
+                  continue
+
+          if archive is None:
+              raise RuntimeError("The source archive did not pass XZ integrity and project checks")
+
+          (root / "MegaDriveTV-source.tar.xz").write_bytes(archive)
+          print("Source archive integrity verified")
+          PY
           tar -xJf MegaDriveTV-source.tar.xz
           test -f MegaDriveTV/app/src/main/java/com/diniz/megadrivetv/MainActivity.kt
 
