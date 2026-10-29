@@ -32,7 +32,7 @@ jobs:
           PREFIX="$RUNNER_TEMP/xsdk-gcc" \
           WORK="$RUNNER_TEMP/xsdk-gcc-work" \
           JOBS="$(nproc)" \
-            "$RUNNER_TEMP/xsdk/tools/toolchain/build.sh"
+            bash "$RUNNER_TEMP/xsdk/tools/toolchain/build.sh"
 
       - name: Build xsdk libraries and XEX tools
         run: |
