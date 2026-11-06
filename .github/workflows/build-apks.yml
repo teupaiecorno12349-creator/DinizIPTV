@@ -28,18 +28,19 @@ jobs:
         with:
           gradle-version: '8.11.1'
 
-      - name: Build debug APKs
-        run: gradle --no-daemon :admin:assembleDebug :player:assembleDebug
+      - name: Build all APKs
+        run: gradle --no-daemon :admin:assembleDebug :player:assembleDebug :dnschanger:assembleDebug
 
       - name: Collect APKs
         run: |
           mkdir -p apks
           cp admin/build/outputs/apk/debug/admin-debug.apk apks/Diniz-IPTV-Admin.apk
           cp player/build/outputs/apk/debug/player-debug.apk apks/Diniz-IPTV-Player.apk
+          cp dnschanger/build/outputs/apk/debug/dnschanger-debug.apk apks/Diniz-DNS-Changer.apk
 
       - name: Upload APKs
         uses: actions/upload-artifact@v4
         with:
-          name: Diniz-IPTV-APKs
+          name: Diniz-Android-APKs
           path: apks/*.apk
           if-no-files-found: error
