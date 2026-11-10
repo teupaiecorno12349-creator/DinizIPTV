@@ -280,7 +280,7 @@ public final class LocalPlaylistActivity extends Activity {
            .put("expiredDate","2099-12-31").put("is_trial",0).put("is_google_pay",false)
            .put("lock",0).put("price","Free");
         prefs.edit().putString("APP_INFO_MODEL",app.toString())
-            .putString("mac_address",id).putString("device_type","activity_home")
+            .putString("mac_address",id).putString("device_type","tv")
             .putString("device_key","").putLong("last_playlist_date",System.currentTimeMillis())
             .putString("user_id","local-"+id).apply();
     }
