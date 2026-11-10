@@ -7,6 +7,7 @@ import android.graphics.Typeface;
 import android.view.Gravity;
 import android.widget.*;
 import android.net.Uri;
+import fi.iki.elonen.NanoHTTPD;
 
 public final class MainActivity extends Activity {
     private EditText mac, key;
@@ -17,7 +18,8 @@ public final class MainActivity extends Activity {
         super.onCreate(b);
         getWindow().getDecorView().setBackgroundColor(0xff101522);
         server = new PanelServer(this);
-        try { server.start(NanoHTTPD.SOCKET_READ_TIMEOUT, false); } catch (Exception ignored) {}
+        boolean started = false;
+        try { server.start(NanoHTTPD.SOCKET_READ_TIMEOUT, false); started = true; } catch (Exception ignored) {}
         LinearLayout page = new LinearLayout(this);
         page.setOrientation(1); page.setPadding(dp(24),dp(22),dp(24),dp(22));
         ScrollView scroll = new ScrollView(this); scroll.addView(page);
@@ -31,7 +33,7 @@ public final class MainActivity extends Activity {
         key=edit("Digite a chave do dispositivo",true);page.addView(key,lp(-1,dp(52)));
         Button save=button("SALVAR MAC E CHAVE");LinearLayout.LayoutParams sl=lp(-1,dp(50));sl.topMargin=dp(12);page.addView(save,sl);
         save.setOnClickListener(v->save());
-        state=text("Servidor local iniciando...",14,0xff8fe0b1,false);LinearLayout.LayoutParams st=lp(-1,-2);st.topMargin=dp(18);page.addView(state,st);
+        state=text(started?"Servidor local ativo na porta 8765.":"Não foi possível iniciar o servidor local.",14,started?0xff8fe0b1:0xffff8a95,false);LinearLayout.LayoutParams st=lp(-1,-2);st.topMargin=dp(18);page.addView(state,st);
         address=text("",16,0xffffffff,true);LinearLayout.LayoutParams al=lp(-1,-2);al.topMargin=dp(8);page.addView(address,al);
         Button copy=button("COPIAR ENDEREÇO");LinearLayout.LayoutParams cl=lp(-1,dp(50));cl.topMargin=dp(12);page.addView(copy,cl);
         copy.setOnClickListener(v->{((ClipboardManager)getSystemService(CLIPBOARD_SERVICE)).setPrimaryClip(ClipData.newPlainText("LK Play",address.getText()));Toast.makeText(this,"Endereço copiado",Toast.LENGTH_SHORT).show();});
@@ -39,9 +41,8 @@ public final class MainActivity extends Activity {
         open.setOnClickListener(v->startActivity(new Intent(Intent.ACTION_VIEW,Uri.parse("http://127.0.0.1:8765/"))));
         TextView warning=text("ATENÇÃO: esta versão é um gerenciador auxiliar. Ela armazena listas no TV Box e oferece uma API local, mas ainda não altera nem conecta automaticamente o player do APK LK Play original. O aplicativo precisa permanecer aberto enquanto o painel é usado. Não exponha esta porta à internet.",13,0xffffd18a,false);
         LinearLayout.LayoutParams wl=lp(-1,-2);wl.topMargin=dp(22);page.addView(warning,wl);
-        mac.setText(getPreferences(0).getString("mac",""));
+        mac.setText(getSharedPreferences("lkplay_host",MODE_PRIVATE).getString("mac",""));
         address.setText("http://"+PanelServer.localIp()+":8765/");
-        state.setText("Servidor local: "+(server.isAlive()?"ATIVO":"iniciando"));
         setContentView(scroll);
     }
     private void save(){
@@ -49,7 +50,7 @@ public final class MainActivity extends Activity {
         String k=key.getText().toString();
         if(!m.matches("^[0-9A-F]{2}(:[0-9A-F]{2}){5}$")){mac.setError("MAC inválido");return;}
         if(k.trim().length()<6){key.setError("Chave muito curta");return;}
-        getPreferences(0).edit().putString("mac",m).putString("key_hash",PanelServer.sha256(k)).apply();
+        getSharedPreferences("lkplay_host",MODE_PRIVATE).edit().putString("mac",m).putString("key_hash",PanelServer.sha256(k)).apply();
         key.setText("");state.setText("Credenciais salvas. Use o mesmo MAC e chave no navegador.");
         Toast.makeText(this,"Salvo",Toast.LENGTH_SHORT).show();
     }
