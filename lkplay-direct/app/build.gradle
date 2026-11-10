@@ -1,0 +1,16 @@
+plugins { id 'com.android.application' }
+android {
+    namespace 'com.lbpro.stream'
+    compileSdk 35
+    defaultConfig {
+        applicationId 'com.lbpro.stream'
+        minSdk 21
+        targetSdk 28
+        versionCode 53
+        versionName '4.4-local'
+    }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}
