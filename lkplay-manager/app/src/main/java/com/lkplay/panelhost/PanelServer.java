@@ -53,9 +53,18 @@ public final class PanelServer extends NanoHTTPD {
             }
             if(path.startsWith("/api/panel/playlists/")){
                 String id=path.substring("/api/panel/playlists/".length());JSONArray old=getLists(),next=new JSONArray();JSONObject result=null;JSONObject b=method==Method.DELETE?new JSONObject():body(s);
-                for(int i=0;i<old.length();i++){JSONObject p=old.getJSONObject(i);if(p.optString("id").equals(id)){result=p;if(method==Method.DELETE)continue;result=make(b,p);result.put("id",id);}next.put(result!=null&&result.optString("id").equals(id)?result:p);}
+                for(int i=0;i<old.length();i++){
+                    JSONObject p=old.getJSONObject(i);
+                    if(p.optString("id").equals(id)){
+                        if(method==Method.DELETE){result=p;continue;}
+                        if(method!=Method.PATCH&&method!=Method.PUT)return json(Response.Status.METHOD_NOT_ALLOWED,err("Método não permitido."));
+                        result=make(b,p);result.put("id",id);next.put(result);
+                    } else next.put(p);
+                }
                 if(result==null)return json(Response.Status.NOT_FOUND,err("Lista não encontrada."));
-                saveLists(next);return json(Response.Status.OK,new JSONObject().put("ok",true).put("playlist",result));
+                saveLists(next);
+                if(method==Method.DELETE)return json(Response.Status.OK,new JSONObject().put("ok",true));
+                return json(Response.Status.OK,new JSONObject().put("ok",true).put("playlist",result));
             }
             return json(Response.Status.NOT_FOUND,err("Rota não encontrada."));
         }catch(Exception e){try{return json(Response.Status.BAD_REQUEST,err(e.getMessage()==null?"Requisição inválida.":e.getMessage()));}catch(Exception ignored){return newFixedLengthResponse("Erro");}}
