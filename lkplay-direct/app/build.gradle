@@ -1,6 +1,6 @@
 plugins { id 'com.android.application' }
 android {
-    namespace 'com.lbpro.stream'
+    namespace 'com.lkplay.patch'
     compileSdk 35
     defaultConfig {
         applicationId 'com.lbpro.stream'
