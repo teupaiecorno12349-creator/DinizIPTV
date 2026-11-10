@@ -275,12 +275,12 @@ public final class LocalPlaylistActivity extends Activity {
         JSONObject app;
         try{app=new JSONObject(prefs.getString("APP_INFO_MODEL","{}"));}catch(Exception e){app=new JSONObject();}
         app.put("result",playlists).put("success",true).put("theme","theme_d")
-           .put("app_version","4.4-local").put("mac_address",id).put("device_key","")
+           .put("app_version","4.4").put("mac_address",id).put("device_key","")
            .put("home_url1","").put("qr_url","").put("qr_url_short","")
            .put("expiredDate","2099-12-31").put("is_trial",0).put("is_google_pay",false)
            .put("lock",0).put("price","Free");
         prefs.edit().putString("APP_INFO_MODEL",app.toString())
-            .putString("mac_address",id).putString("device_type","tv")
+            .putString("mac_address",id).putString("device_type","activity_home")
             .putString("device_key","").putLong("last_playlist_date",System.currentTimeMillis())
             .putString("user_id","local-"+id).apply();
     }
