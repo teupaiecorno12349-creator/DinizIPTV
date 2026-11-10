@@ -1,0 +1,1 @@
+Trigger build after exporting every DEX file.
