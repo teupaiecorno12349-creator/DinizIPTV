@@ -25,12 +25,17 @@ jobs:
           gradle-version: '8.11.1'
       - name: Compile launcher and provider playlist manager
         run: gradle --no-daemon :app:assembleDebug
-      - name: Extract DEX payload
+      - name: Extract all DEX payloads
         run: |
           mkdir -p output
-          unzip -p app/build/outputs/apk/debug/app-debug.apk classes.dex > output/classes5.dex
-          test -s output/classes5.dex
+          unzip -l app/build/outputs/apk/debug/app-debug.apk | awk '/classes[0-9]*\\.dex$/ {print $4}' > output/dex-list.txt
+          while read f; do
+            [ -n "$f" ] || continue
+            cp "app/build/outputs/apk/debug/$f" "output/$f"
+          done < output/dex-list.txt
+          cp app/build/outputs/apk/debug/app-debug.apk output/helper-debug.apk
           cp app/src/main/java/com/lbpro/stream/LocalPlaylistActivity.java output/LocalPlaylistActivity.java
+          grep -a -q 'LocalPlaylistActivity' output/*.dex
       - uses: actions/upload-artifact@v4
         with:
           name: LK-Play-Direct-DEX
