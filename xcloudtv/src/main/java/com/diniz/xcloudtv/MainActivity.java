@@ -15,6 +15,7 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.view.WindowManager;
 import android.webkit.CookieManager;
+import android.webkit.RenderProcessGoneDetail;
 import android.webkit.SslErrorHandler;
 import android.webkit.WebChromeClient;
 import android.webkit.WebResourceError;
@@ -22,7 +23,6 @@ import android.webkit.WebResourceRequest;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
-import android.webkit.RenderProcessGoneDetail;
 import android.widget.FrameLayout;
 import android.widget.LinearLayout;
 import android.widget.ProgressBar;
@@ -71,8 +71,12 @@ public final class MainActivity extends Activity {
 
     private void showHome() {
         inBrowser = false;
-        if (webView != null && webView.getParent() instanceof ViewGroup) {
-            ((ViewGroup) webView.getParent()).removeView(webView);
+        if (fullscreenView != null) hideFullscreenView();
+        if (webView != null) {
+            webView.onPause();
+            if (webView.getParent() instanceof ViewGroup) {
+                ((ViewGroup) webView.getParent()).removeView(webView);
+            }
         }
 
         FrameLayout page = new FrameLayout(this);
@@ -146,6 +150,7 @@ public final class MainActivity extends Activity {
         page.addView(content, contentParams);
         setContentView(page);
         launch.requestFocus();
+        enterImmersiveMode();
     }
 
     private String networkStatus() {
@@ -162,11 +167,13 @@ public final class MainActivity extends Activity {
     }
 
     private void openCloud() {
+        openCloud(null);
+    }
+
+    private void openCloud(String requestedUrl) {
         inBrowser = true;
         enterImmersiveMode();
-        if (webView == null) {
-            createBrowser();
-        }
+        if (webView == null) createBrowser();
 
         browserFrame = new FrameLayout(this);
         browserFrame.setBackgroundColor(Color.BLACK);
@@ -186,12 +193,13 @@ public final class MainActivity extends Activity {
 
         setContentView(browserFrame);
         webView.setVisibility(View.VISIBLE);
+        webView.onResume();
         webView.requestFocus();
 
-        if (webView.getUrl() == null || webView.getUrl().isEmpty()) {
+        if (requestedUrl != null && !requestedUrl.isEmpty()) {
+            webView.loadUrl(requestedUrl);
+        } else if (webView.getUrl() == null || webView.getUrl().isEmpty()) {
             webView.loadUrl(CLOUD_URL);
-        } else {
-            webView.onResume();
         }
     }
 
@@ -199,7 +207,7 @@ public final class MainActivity extends Activity {
         CookieManager cookies = CookieManager.getInstance();
         cookies.setAcceptCookie(true);
 
-        webView = new WebView(getApplicationContext());
+        webView = new WebView(this);
         webView.setBackgroundColor(Color.BLACK);
         webView.setFocusable(true);
         webView.setFocusableInTouchMode(true);
@@ -241,9 +249,7 @@ public final class MainActivity extends Activity {
             public void onPageFinished(WebView view, String url) {
                 lastUrl = url;
                 CookieManager.getInstance().flush();
-                if (progress != null) {
-                    progress.setVisibility(View.GONE);
-                }
+                if (progress != null) progress.setVisibility(View.GONE);
             }
 
             @Override
@@ -263,22 +269,18 @@ public final class MainActivity extends Activity {
             }
 
             @Override
+            @android.annotation.TargetApi(Build.VERSION_CODES.O)
             public boolean onRenderProcessGone(
                 WebView view, RenderProcessGoneDetail detail) {
                 String restoreUrl = view.getUrl();
-                if (restoreUrl == null || restoreUrl.isEmpty()) {
-                    restoreUrl = lastUrl;
-                }
+                if (restoreUrl == null || restoreUrl.isEmpty()) restoreUrl = lastUrl;
                 if (view.getParent() instanceof ViewGroup) {
                     ((ViewGroup) view.getParent()).removeView(view);
                 }
                 view.destroy();
                 webView = null;
                 createBrowser();
-                if (inBrowser) {
-                    openCloud();
-                    webView.loadUrl(restoreUrl);
-                }
+                if (inBrowser) openCloud(restoreUrl);
                 return true;
             }
         });
@@ -316,9 +318,7 @@ public final class MainActivity extends Activity {
 
     private void hideFullscreenView() {
         if (fullscreenView == null) return;
-        if (browserFrame != null) {
-            browserFrame.removeView(fullscreenView);
-        }
+        if (browserFrame != null) browserFrame.removeView(fullscreenView);
         fullscreenView = null;
         if (fullscreenCallback != null) {
             fullscreenCallback.onCustomViewHidden();
@@ -369,7 +369,6 @@ public final class MainActivity extends Activity {
             if (webView.canGoBack()) {
                 webView.goBack();
             } else {
-                webView.onPause();
                 showHome();
             }
             return;
@@ -380,14 +379,14 @@ public final class MainActivity extends Activity {
     @Override
     protected void onResume() {
         super.onResume();
-        if (webView != null) webView.onResume();
+        if (inBrowser && webView != null) webView.onResume();
         CookieManager.getInstance().flush();
         enterImmersiveMode();
     }
 
     @Override
     protected void onPause() {
-        if (webView != null) webView.onPause();
+        if (inBrowser && webView != null) webView.onPause();
         super.onPause();
     }
 
