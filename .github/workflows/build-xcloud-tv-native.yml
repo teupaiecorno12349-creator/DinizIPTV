@@ -64,7 +64,7 @@ jobs:
 
       - name: Install JavaScript dependencies
         working-directory: upstream
-        run: yarn install
+        run: YARN_ENABLE_IMMUTABLE_INSTALLS=false yarn install
 
       - name: Build Diniz XCloud APK (32-bit ARM, 720p, native renderer)
         working-directory: upstream/android
