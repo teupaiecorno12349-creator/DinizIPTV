@@ -10,6 +10,7 @@ import android.net.NetworkInfo;
 import android.os.Build;
 import android.os.Bundle;
 import android.view.Gravity;
+import android.view.InputDevice;
 import android.view.KeyEvent;
 import android.view.View;
 import android.view.ViewGroup;
@@ -32,7 +33,10 @@ import android.widget.Toast;
 import android.net.http.SslError;
 
 public final class MainActivity extends Activity {
-    private static final String CLOUD_URL = "https://play.xbox.com/";
+    private static final String CLOUD_URL = "https://www.xbox.com/play";
+    private static final String DESKTOP_UA =
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +
+        "(KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36 Edg/131.0.0.0";
 
     private FrameLayout browserFrame;
     private WebView webView;
@@ -218,6 +222,10 @@ public final class MainActivity extends Activity {
         settings.setDomStorageEnabled(true);
         settings.setDatabaseEnabled(true);
         settings.setMediaPlaybackRequiresUserGesture(false);
+        // Xbox Cloud rejects the stock Android WebView user-agent.
+        settings.setUserAgentString(DESKTOP_UA);
+        settings.setLoadWithOverviewMode(true);
+        settings.setUseWideViewPort(true);
         settings.setSupportZoom(false);
         settings.setBuiltInZoomControls(false);
         settings.setDisplayZoomControls(false);
@@ -287,6 +295,20 @@ public final class MainActivity extends Activity {
 
         webView.setWebChromeClient(new WebChromeClient() {
             @Override
+            public void onPermissionRequest(android.webkit.PermissionRequest request) {
+                String[] resources = request.getResources();
+                for (String resource : resources) {
+                    if (android.webkit.PermissionRequest.RESOURCE_PROTECTED_MEDIA_ID.equals(resource)) {
+                        request.grant(new String[]{
+                            android.webkit.PermissionRequest.RESOURCE_PROTECTED_MEDIA_ID
+                        });
+                        return;
+                    }
+                }
+                request.deny();
+            }
+
+            @Override
             public void onProgressChanged(WebView view, int value) {
                 if (progress != null) {
                     progress.setProgress(value);
@@ -350,8 +372,19 @@ public final class MainActivity extends Activity {
         if (hasFocus) enterImmersiveMode();
     }
 
+    private boolean isFromGamepad(KeyEvent event) {
+        int source = event.getSource();
+        return (source & InputDevice.SOURCE_GAMEPAD) == InputDevice.SOURCE_GAMEPAD ||
+            (source & InputDevice.SOURCE_JOYSTICK) == InputDevice.SOURCE_JOYSTICK;
+    }
+
     @Override
     public boolean dispatchKeyEvent(KeyEvent event) {
+        // Keep a controller's B button inside the Xbox web player.
+        if (event.getKeyCode() == KeyEvent.KEYCODE_BACK && isFromGamepad(event)) {
+            if (webView != null) webView.dispatchKeyEvent(event);
+            return true;
+        }
         if (event.getKeyCode() == KeyEvent.KEYCODE_BACK &&
             event.getAction() == KeyEvent.ACTION_UP) {
             handleBack();
