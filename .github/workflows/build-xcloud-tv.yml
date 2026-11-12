@@ -1,0 +1,50 @@
+name: Build Diniz XCloud TV
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ xcloud-tv ]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android 36 platform
+        run: |
+          yes | sdkmanager --licenses
+          sdkmanager "platforms;android-36" "build-tools;36.0.0"
+
+      - name: Set up Gradle 8.11.1
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.11.1'
+
+      - name: Build XCloud TV APK
+        run: gradle --no-daemon :xcloudtv:assembleDebug
+
+      - name: Prepare APK
+        run: |
+          mkdir -p apks
+          cp xcloudtv/build/outputs/apk/debug/xcloudtv-debug.apk apks/Diniz-XCloud-TV.apk
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: Diniz-XCloud-TV
+          path: apks/Diniz-XCloud-TV.apk
+          if-no-files-found: error
