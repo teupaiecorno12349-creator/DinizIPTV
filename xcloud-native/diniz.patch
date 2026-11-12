@@ -97,3 +97,22 @@ diff --git a/src/store/settingStore.ts b/src/store/settingStore.ts
      return cachedSettings;
    }
  };
+diff --git a/android/app/build.gradle b/android/app/build.gradle
+--- a/android/app/build.gradle
++++ b/android/app/build.gradle
+@@ -128,11 +128,14 @@
+ def nanoRustHostTag = { ndkDir ->
+-    def armTag = file("${ndkDir}/toolchains/llvm/prebuilt/darwin-arm64")
+-    if (armTag.exists()) {
+-        return "darwin-arm64"
+-    }
+-    return "darwin-x86_64"
++    def hostTags = ["linux-x86_64", "darwin-arm64", "darwin-x86_64"]
++    def hostTag = hostTags.find { tag ->
++        file("${ndkDir}/toolchains/llvm/prebuilt/${tag}").exists()
++    }
++    if (hostTag == null) {
++        throw new GradleException("No supported Android NDK host toolchain found")
++    }
++    return hostTag
+ }
