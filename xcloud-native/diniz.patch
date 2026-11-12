@@ -7,9 +7,16 @@ diff --git a/android/app/build.gradle b/android/app/build.gradle
 -            applicationId "com.xstreaming"
 +            applicationId "com.diniz.xcloudtv"
          }
-@@ -138,1 +138,1 @@
+@@ -134,8 +134,8 @@
+         release {
+             // Caution! In production, you need to generate your own keystore file.
+             // see https://reactnative.dev/docs/signed-apk-android.
+             signingConfig signingConfigs.debug
 -            signingConfig signingConfigs.release
 +            signingConfig signingConfigs.debug
+             minifyEnabled enableProguardInReleaseBuilds
+             proguardFiles getDefaultProguardFile("proguard-android.txt"), "proguard-rules.pro"
+         }
 @@ -178,7 +178,10 @@
  def nanoRustHostTag = { ndkDir ->
 -    def armTag = file("${ndkDir}/toolchains/llvm/prebuilt/darwin-arm64")
