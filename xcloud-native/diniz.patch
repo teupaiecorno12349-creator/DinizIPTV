@@ -1,23 +1,16 @@
 diff --git a/android/app/build.gradle b/android/app/build.gradle
 --- a/android/app/build.gradle
 +++ b/android/app/build.gradle
-@@ -62,4 +62,4 @@
-     prod {
-         dimension "environment"
--        applicationId "com.xstreaming"
-+        applicationId "com.diniz.xcloudtv"
-     }
-@@ -105,8 +105,8 @@
-         release {
-             // Caution! In production, you need to generate your own keystore file.
-             // see https://reactnative.dev/docs/signed-apk-android.
-             signingConfig signingConfigs.debug
+@@ -109,4 +109,4 @@
+         prod {
+             dimension "environment"
+-            applicationId "com.xstreaming"
++            applicationId "com.diniz.xcloudtv"
+         }
+@@ -138,1 +138,1 @@
 -            signingConfig signingConfigs.release
 +            signingConfig signingConfigs.debug
-             minifyEnabled enableProguardInReleaseBuilds
-             proguardFiles getDefaultProguardFile("proguard-android.txt"), "proguard-rules.pro"
-         }
-@@ -128,7 +128,10 @@
+@@ -178,7 +178,10 @@
  def nanoRustHostTag = { ndkDir ->
 -    def armTag = file("${ndkDir}/toolchains/llvm/prebuilt/darwin-arm64")
 -    if (armTag.exists()) {
@@ -77,7 +70,7 @@ new file mode 100644
 diff --git a/src/store/settingStore.ts b/src/store/settingStore.ts
 --- a/src/store/settingStore.ts
 +++ b/src/store/settingStore.ts
-@@ -78,5 +78,5 @@
+@@ -113,5 +113,5 @@
  const defaultSettings: Settings = {
 -  locale: 'en',
 -  locale_follow_system: true,
@@ -85,13 +78,17 @@ diff --git a/src/store/settingStore.ts b/src/store/settingStore.ts
 +  locale_follow_system: false,
    resolution: 720,
    render_engine: 'native',
-@@ -93,1 +93,1 @@
+@@ -126,3 +126,3 @@
+   audio_rumble_threshold: 20,
 -  preferred_game_language: 'en-US',
 +  preferred_game_language: 'pt-BR',
-@@ -138,1 +138,1 @@
+   force_region_ip: '',
+@@ -198,3 +198,3 @@
+   coop: false,
 -  use_msal_login: false,
 +  use_msal_login: true,
-@@ -165,9 +165,5 @@
+   enable_microphone: false,
+@@ -244,9 +244,5 @@
    let settings = storage.getString(STORE_KEY);
    if (!settings) {
 -    cachedSettings = {
@@ -102,7 +99,7 @@ diff --git a/src/store/settingStore.ts b/src/store/settingStore.ts
 +    cachedSettings = {...defaultSettings};
      return cachedSettings;
    }
-@@ -191,9 +187,5 @@
+@@ -280,9 +276,5 @@
    } catch {
 -    cachedSettings = {
 -      ...defaultSettings,
