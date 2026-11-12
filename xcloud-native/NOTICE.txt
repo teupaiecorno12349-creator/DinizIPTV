@@ -1,0 +1,6 @@
+Diniz XCloud TV Native Edition
+Based on XStreaming (https://github.com/Geocld/XStreaming)
+Pinned source commit: 06ef1c7ee01d09cf9bb2a97fc4895da85e8488a8
+License: GNU Affero General Public License version 3 (AGPL-3.0)
+See assets/AGPL-3.0.txt in the APK and xcloud-native/diniz.patch in this repository for the Diniz modifications.
+Independent community project; not affiliated with Microsoft or Xbox.
