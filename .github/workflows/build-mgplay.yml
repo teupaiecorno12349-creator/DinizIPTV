@@ -15,6 +15,9 @@ jobs:
   build:
     if: github.actor != 'github-actions[bot]' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
+    env:
+      ANDROID_HOME: /usr/local/lib/android/sdk
+      ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -42,8 +45,10 @@ jobs:
 
       - name: Install Android SDK components
         run: |
-          yes | sdkmanager --licenses >/dev/null || true
-          sdkmanager --install 'platforms;android-36' 'build-tools;36.0.0'
+          SDKMANAGER="$ANDROID_HOME/cmdline-tools/16.0/bin/sdkmanager"
+          test -x "$SDKMANAGER"
+          yes | "$SDKMANAGER" --licenses >/dev/null || true
+          "$SDKMANAGER" --install 'platforms;android-36' 'build-tools;36.0.0'
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
