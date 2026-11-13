@@ -87,12 +87,16 @@ public final class LocalPanelServer extends NanoHTTPD {
     }
 
     private void saveLists(JSONObject model, JSONArray lists) throws Exception {
-        model.put("result", lists);
-        model.put("mac_address", deviceId(context));
-        if (!model.has("success")) model.put("success", true);
+        String id = deviceId(context);
+        model.put("result", lists).put("success", true).put("theme", "theme_d")
+                .put("app_version", "4.4").put("mac_address", id).put("device_key", "")
+                .put("home_url1", "").put("qr_url", "").put("qr_url_short", "")
+                .put("expiredDate", "2099-12-31").put("is_trial", 0).put("is_google_pay", false)
+                .put("lock", 0).put("price", "Free");
         prefs().edit().putString(MODEL, model.toString())
-                .putString("mac_address", deviceId(context))
-                .putString("device_type", "tv").apply();
+                .putString("mac_address", id).putString("device_type", "tv")
+                .putString("device_key", "").putLong("last_playlist_date", System.currentTimeMillis())
+                .putString("user_id", "local-" + id).apply();
     }
 
     private JSONObject body(IHTTPSession session) throws Exception {
