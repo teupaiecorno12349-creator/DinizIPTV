@@ -5,6 +5,7 @@ on:
     branches: [ mgplay-build ]
     paths:
       - 'MG-Play-source.part*'
+      - 'mgplay/**'
       - '.github/workflows/build-mgplay.yml'
   workflow_dispatch:
 
