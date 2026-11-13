@@ -139,7 +139,9 @@ public final class LocalPlaylistActivity extends Activity {
             TextView empty=label("Nenhuma lista cadastrada. Use “Adicionar lista” para começar.",14,0xffaebed2,false);
             LinearLayout.LayoutParams ep=new LinearLayout.LayoutParams(-1,-2);ep.topMargin=dp(12);items.addView(empty,ep);
         }
-        setContentView(root);
+        ScrollView scroll=new ScrollView(this);
+        scroll.addView(root);
+        setContentView(scroll);
     }
 
     private void showForm(int index) {
@@ -284,8 +286,7 @@ public final class LocalPlaylistActivity extends Activity {
     }
 
     private void saveAppInfo() throws Exception {
-        String id=Settings.Secure.getString(getContentResolver(),Settings.Secure.ANDROID_ID);
-        if(id==null||id.isEmpty())id="local-device";
+        String id=LocalPanelServer.deviceId(this);
         JSONObject app;
         try{app=new JSONObject(prefs.getString("APP_INFO_MODEL","{}"));}catch(Exception e){app=new JSONObject();}
         app.put("result",playlists).put("success",true).put("theme","theme_d")
