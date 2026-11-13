@@ -329,6 +329,11 @@ public final class LocalPlaylistActivity extends Activity {
         } catch(Exception e){Toast.makeText(this,"Não foi possível abrir o player: "+e.getMessage(),Toast.LENGTH_LONG).show();}
     }
 
+    @Override protected void onResume() {
+        super.onResume();
+        if(root!=null&&!formVisible) showManager();
+    }
+
     @Override public void onBackPressed() {
         if(formVisible)showManager();else super.onBackPressed();
     }
