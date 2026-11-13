@@ -192,8 +192,13 @@ public final class PanelServer extends NanoHTTPD {
         return true;
     }
 
-    private Response error(Response.IStatus status, String message) throws Exception {
-        return json(status, new JSONObject().put("ok", false).put("error", message));
+    private Response error(Response.IStatus status, String message) {
+        JSONObject body = new JSONObject();
+        try {
+            body.put("ok", false);
+            body.put("error", message);
+        } catch (Exception ignored) {}
+        return json(status, body);
     }
 
     private Response json(Response.IStatus status, JSONObject body) {
