@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#090817">
+<title>MG Play | Painel</title>
+<style>
+:root{color-scheme:dark;--bg:#080812;--panel:#121225;--panel2:#191932;--line:#30264e;--text:#f7f5ff;--muted:#aaa6c4;--purple:#8a38ef;--cyan:#1db8ef;--danger:#b94361;--ok:#26c58c}
+*{box-sizing:border-box}body{margin:0;background:radial-gradient(circle at 80% 0,#241047 0,transparent 36%),var(--bg);color:var(--text);font:15px system-ui,Segoe UI,Arial,sans-serif;min-height:100vh;padding:24px}
+.wrap{max-width:1020px;margin:0 auto}.top{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:24px}.brand{font-size:30px;font-weight:900;letter-spacing:-1px}.brand span{color:#b25cff}.muted{color:var(--muted)}.pill{border:1px solid var(--line);background:#17142a;color:#c9b8ef;padding:8px 12px;border-radius:100px;font-size:12px}
+.card{background:linear-gradient(145deg,rgba(25,25,50,.98),rgba(15,15,31,.98));border:1px solid var(--line);border-radius:18px;padding:22px;margin:16px 0;box-shadow:0 18px 50px #0005}h1,h2,h3{margin:0 0 10px}h2{font-size:21px}p{line-height:1.5}.grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}.field{margin:13px 0}.field label{display:block;color:#c7c0df;font-weight:800;font-size:11px;letter-spacing:.8px;margin:0 0 7px}.field input,.field select{width:100%;border:1px solid #41345f;border-radius:10px;padding:13px;background:#0c0b19;color:#fff;font:inherit;outline:none}.field input:focus,.field select:focus{border-color:#a653ff;box-shadow:0 0 0 3px #8a38ef30}
+.btn{border:0;border-radius:10px;padding:12px 18px;background:linear-gradient(100deg,var(--purple),#5e36d9);color:white;font-weight:900;cursor:pointer;margin:5px 7px 3px 0}.btn.secondary{background:#292744;color:#e5def8;border:1px solid #49406b}.btn.danger{background:#512238;color:#ffdce6;border:1px solid #8b3555}.btn:disabled{opacity:.55;cursor:wait}.hidden{display:none!important}.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin:14px 0}.stat{background:#0d0d1d;border:1px solid var(--line);padding:15px;border-radius:12px}.stat b{display:block;font-size:25px;color:#bc76ff}.item{display:flex;align-items:center;justify-content:space-between;gap:16px;background:#0d0d1d;border:1px solid #32294d;border-radius:13px;padding:15px;margin-top:11px}.item-title{font-weight:850}.item-sub{font-size:12px;color:var(--muted);margin-top:4px;overflow-wrap:anywhere}.actions{white-space:nowrap}.notice{padding:11px 13px;border-radius:10px;background:#123a31;color:#a5f6d5;margin-top:12px}.notice.err{background:#48202d;color:#ffc6d1}.small{font-size:12px;color:var(--muted)}
+@media(max-width:650px){body{padding:12px}.card{padding:16px}.grid{grid-template-columns:1fr}.stats{grid-template-columns:1fr}.item{display:block}.actions{margin-top:10px;white-space:normal}.top{align-items:flex-start;flex-direction:column}}
+</style>
+</head>
+<body>
+<main class="wrap">
+  <header class="top"><div><div class="brand">MG <span>PLAY</span></div><div class="muted">PAINEL DE GERENCIAMENTO</div></div><div class="pill" id="connection">Aguardando conexão</div></header>
+  <section class="card" id="loginCard">
+    <h2>Acessar dispositivo</h2><p class="muted">Entre usando o MAC MG Play e a chave exibidos na tela Configurações do aplicativo na TV Box.</p>
+    <div class="grid"><div class="field"><label>MAC DO DISPOSITIVO</label><input id="mac" autocomplete="off" placeholder="02:AA:BB:CC:DD:EE"></div><div class="field"><label>CHAVE DO DISPOSITIVO</label><input id="deviceKey" type="password" autocomplete="off" placeholder="Chave exibida no aplicativo"></div></div>
+    <button class="btn" id="loginBtn">ENTRAR NO PAINEL</button><div id="loginNotice"></div>
+  </section>
+  <section class="hidden" id="manager">
+    <section class="card"><div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap"><div><h2>Visão geral</h2><div class="muted" id="deviceLabel">Dispositivo conectado</div></div><button class="btn secondary" id="logoutBtn">SAIR</button></div>
+      <div class="stats"><div class="stat"><span class="small">LISTAS CADASTRADAS</span><b id="listCount">0</b></div><div class="stat"><span class="small">TIPO XTREAM</span><b id="xtreamCount">0</b></div><div class="stat"><span class="small">TIPO M3U</span><b id="m3uCount">0</b></div></div>
+    </section>
+    <section class="card" id="editor"><h2 id="editorTitle">Adicionar lista IPTV</h2><div class="field"><label>FORMATO</label><select id="type"><option value="xtream">Xtream Codes</option><option value="m3u">M3U / M3U8</option></select></div>
+      <div class="field"><label>NOME DA LISTA</label><input id="name" placeholder="Ex.: Minha TV"></div>
+      <div id="xtreamFields"><div class="field"><label>URL DO SERVIDOR</label><input id="server" placeholder="https://servidor:porta"></div><div class="grid"><div class="field"><label>USUÁRIO</label><input id="username" autocomplete="off"></div><div class="field"><label>SENHA</label><input id="password" type="password" autocomplete="new-password"></div></div></div>
+      <div id="m3uFields" class="hidden"><div class="field"><label>URL DA PLAYLIST M3U</label><input id="m3uUrl" placeholder="https://servidor/lista.m3u"></div></div>
+      <button class="btn" id="saveBtn">SALVAR LISTA</button><button class="btn secondary hidden" id="cancelBtn">CANCELAR EDIÇÃO</button><div id="formNotice"></div>
+    </section>
+    <section class="card"><div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap"><div><h2>Minhas listas</h2><div class="muted">As alterações são salvas neste dispositivo.</div></div><button class="btn secondary" id="refreshBtn">ATUALIZAR</button></div><div id="items"><p class="muted">Carregando...</p></div></section>
+    <p class="small">MG Play • Painel local. Para acessar, o navegador e a TV Box precisam estar na mesma rede Wi-Fi ou Ethernet e o aplicativo deve estar em execução.</p>
+  </section>
+</main>
+<script>
+(()=>{
+  const $=id=>document.getElementById(id);let token=sessionStorage.getItem('mgplay_token')||'',editingId=null,items=[];
+  function notice(id,message,bad=false){const el=$(id);el.textContent=message||'';el.className=message?'notice'+(bad?' err':''):''}
+  async function api(path,method='GET',body){const headers={Accept:'application/json'};if(token)headers.Authorization='Bearer '+token;if(body)headers['Content-Type']='application/json';const response=await fetch(path,{method,headers,body:body?JSON.stringify(body):undefined});let data={};try{data=await response.json()}catch(e){}if(!response.ok||data.ok===false)throw new Error(data.error||('Erro HTTP '+response.status));return data}
+  async function login(){const btn=$('loginBtn');btn.disabled=true;notice('loginNotice','Validando dispositivo...');try{const data=await api('/api/login','POST',{mac:$('mac').value.trim(),device_key:$('deviceKey').value});token=data.access_token;sessionStorage.setItem('mgplay_token',token);$('loginCard').classList.add('hidden');$('manager').classList.remove('hidden');$('deviceLabel').textContent='MAC: '+data.device.mac;$('connection').textContent='Conectado • '+data.device.mac;await load()}catch(e){notice('loginNotice',e.message,true)}finally{btn.disabled=false}}
+  async function load(){try{const data=await api('/api/playlists');items=data.playlists||[];render()}catch(e){notice('formNotice',e.message,true)}}
+  function render(){ $('items').replaceChildren();$('listCount').textContent=items.length;$('xtreamCount').textContent=items.filter(x=>x.type==='xtream').length;$('m3uCount').textContent=items.filter(x=>x.type==='m3u').length;if(!items.length){const p=document.createElement('p');p.className='muted';p.textContent='Nenhuma lista cadastrada. Use o formulário acima para adicionar sua primeira lista.';$('items').append(p);return}
+    items.forEach(item=>{const row=document.createElement('article');row.className='item';const info=document.createElement('div');const title=document.createElement('div');title.className='item-title';title.textContent=item.name;const sub=document.createElement('div');sub.className='item-sub';sub.textContent=item.type==='m3u'?item.m3u_url:(item.server_url+' • '+item.username);info.append(title,sub);const actions=document.createElement('div');actions.className='actions';const edit=document.createElement('button');edit.className='btn secondary';edit.textContent='EDITAR';edit.onclick=()=>openEdit(item);const del=document.createElement('button');del.className='btn danger';del.textContent='EXCLUIR';del.onclick=()=>removeItem(item);actions.append(edit,del);row.append(info,actions);$('items').append(row)})}
+  function setType(){const m3u=$('type').value==='m3u';$('m3uFields').classList.toggle('hidden',!m3u);$('xtreamFields').classList.toggle('hidden',m3u)}
+  function resetForm(){editingId=null;$('editorTitle').textContent='Adicionar lista IPTV';$('type').value='xtream';$('name').value='';$('server').value='';$('username').value='';$('password').value='';$('m3uUrl').value='';$('saveBtn').textContent='SALVAR LISTA';$('cancelBtn').classList.add('hidden');setType();notice('formNotice','')}
+  function openEdit(item){editingId=item.id;$('editorTitle').textContent='Editar lista';$('type').value=item.type;$('name').value=item.name||'';$('server').value=item.server_url||'';$('username').value=item.username||'';$('password').value=item.password||'';$('m3uUrl').value=item.m3u_url||'';$('saveBtn').textContent='SALVAR ALTERAÇÕES';$('cancelBtn').classList.remove('hidden');setType();$('editor').scrollIntoView({behavior:'smooth',block:'start'})}
+  async function save(){const btn=$('saveBtn');btn.disabled=true;const type=$('type').value,body={type,name:$('name').value.trim()};if(type==='m3u')body.m3u_url=$('m3uUrl').value.trim();else{body.server_url=$('server').value.trim();body.username=$('username').value.trim();body.password=$('password').value}try{await api(editingId?'/api/playlists/'+encodeURIComponent(editingId):'/api/playlists',editingId?'PUT':'POST',body);resetForm();notice('formNotice','Lista salva com sucesso.');await load()}catch(e){notice('formNotice',e.message,true)}finally{btn.disabled=false}}
+  async function removeItem(item){if(!confirm('Excluir a lista '+item.name+'?'))return;try{await api('/api/playlists/'+encodeURIComponent(item.id),'DELETE');await load()}catch(e){notice('formNotice',e.message,true)}}
+  function logout(){token='';sessionStorage.removeItem('mgplay_token');$('manager').classList.add('hidden');$('loginCard').classList.remove('hidden');$('connection').textContent='Sessão encerrada';resetForm()}
+  $('loginBtn').onclick=login;$('deviceKey').onkeydown=e=>{if(e.key==='Enter')login()};$('saveBtn').onclick=save;$('cancelBtn').onclick=resetForm;$('type').onchange=setType;$('refreshBtn').onclick=load;$('logoutBtn').onclick=logout;
+  setType();if(token){$('loginCard').classList.add('hidden');$('manager').classList.remove('hidden');$('connection').textContent='Sessão ativa';load()}
+})();
+</script>
+</body>
+</html>
