@@ -34,6 +34,8 @@ public final class LocalPlaylistActivity extends Activity {
     private TextView status;
     private Button save;
     private SharedPreferences prefs;
+    private LocalPanelServer panelServer;
+    private String panelKey, panelDeviceId;
     private JSONArray playlists = new JSONArray();
     private boolean formVisible = false;
     private int editing = -1;
@@ -45,6 +47,14 @@ public final class LocalPlaylistActivity extends Activity {
         super.onCreate(state);
         getWindow().getDecorView().setBackgroundColor(Color.rgb(13,20,33));
         prefs = prefs();
+        panelDeviceId = LocalPanelServer.deviceId(this);
+        panelKey = LocalPanelServer.deviceKey(this);
+        panelServer = new LocalPanelServer(this);
+        try {
+            panelServer.start(5000, false);
+        } catch (Exception e) {
+            Toast.makeText(this, "Painel web indisponível: " + e.getMessage(), Toast.LENGTH_LONG).show();
+        }
         loadExisting();
         showManager();
     }
@@ -95,9 +105,13 @@ public final class LocalPlaylistActivity extends Activity {
     }
 
     private void showManager() {
+        loadExisting();
         formVisible=false; root=column();
         root.addView(label("LK PLAY",30,Color.WHITE,true));
-        root.addView(label("LISTAS LOCAIS • SEM CONTA OU PAINEL EXTERNO",12,0xff8fa5c0,true));
+        root.addView(label("PAINEL WEB • GERENCIE PELO CELULAR",12,0xff8fa5c0,true));
+        root.addView(label("Endereço: http://" + LocalPanelServer.localIp() + ":8765/",13,0xff72d6c8,true));
+        root.addView(label("ID do dispositivo: " + panelDeviceId,11,0xffaebed2,false));
+        root.addView(label("Chave de acesso: " + panelKey,11,0xffaebed2,false));
         TextView info=label("Cadastre sua lista diretamente neste aparelho. A conexão será feita somente com o servidor do seu provedor IPTV.",14,0xffdbe5f2,false);
         LinearLayout.LayoutParams ip=new LinearLayout.LayoutParams(-1,-2); ip.topMargin=dp(18); root.addView(info,ip);
         Button add=button("+ ADICIONAR LISTA"); LinearLayout.LayoutParams ap=new LinearLayout.LayoutParams(-1,dp(52)); ap.topMargin=dp(18); root.addView(add,ap);
@@ -318,5 +332,9 @@ public final class LocalPlaylistActivity extends Activity {
     @Override public void onBackPressed() {
         if(formVisible)showManager();else super.onBackPressed();
     }
-    @Override protected void onDestroy(){super.onDestroy();io.shutdownNow();}
+    @Override protected void onDestroy(){
+        if(panelServer!=null) panelServer.stop();
+        super.onDestroy();
+        io.shutdownNow();
+    }
 }

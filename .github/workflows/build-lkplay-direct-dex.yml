@@ -43,13 +43,17 @@ jobs:
           PY
           cp app/build/outputs/apk/debug/app-debug.apk output/helper-debug.apk
           cp app/src/main/java/com/lbpro/stream/LocalPlaylistActivity.java output/LocalPlaylistActivity.java
+          cp app/src/main/java/com/lbpro/stream/LocalPanelServer.java output/LocalPanelServer.java
+          cp app/src/main/assets/panel.html output/panel.html
           python3 - <<'PY'
           import glob
           paths=glob.glob("output/classes*.dex")
           if not paths: raise SystemExit("No DEX payloads were exported")
           data=b"".join(open(p,"rb").read() for p in paths)
-          if b"com/lbpro/stream/LocalPlaylistActivity" not in data:
-              raise SystemExit("LocalPlaylistActivity class descriptor not found")
+          required = [b"com/lbpro/stream/LocalPlaylistActivity", b"com/lbpro/stream/LocalPanelServer"]
+          for descriptor in required:
+              if descriptor not in data:
+                  raise SystemExit("Missing DEX class: " + descriptor.decode())
           if b"Lcom/lbpro/stream/R;" in data:
               raise SystemExit("Duplicate original R class detected; check Gradle namespace")
           print("Verified", len(paths), "DEX file(s) and LocalPlaylistActivity descriptor")
