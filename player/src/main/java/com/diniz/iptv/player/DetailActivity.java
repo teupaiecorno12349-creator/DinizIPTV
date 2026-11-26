@@ -232,14 +232,15 @@ public class DetailActivity extends Activity {
             }
             String label = "T" + episode.season + "  E" + episode.episode;
             if (!episode.episodeTitle.isEmpty()) label += "  •  " + episode.episodeTitle;
-            Button button = button(label);
+            final String episodeLabel = label;
+            Button button = button(episodeLabel);
             button.setGravity(Gravity.LEFT | Gravity.CENTER_VERTICAL);
             button.setOnClickListener(v -> {
                 if (episode.containerExtension == null || episode.containerExtension.trim().isEmpty()) {
                     Toast.makeText(this, "O fornecedor não informou o formato deste episódio.", Toast.LENGTH_LONG).show();
                     return;
                 }
-                play(episode.id, "series", episode.containerExtension, label);
+                play(episode.id, "series", episode.containerExtension, episodeLabel);
             });
             LinearLayout.LayoutParams ep = new LinearLayout.LayoutParams(-1, dp(54));
             ep.setMargins(0, 0, 0, dp(7));
