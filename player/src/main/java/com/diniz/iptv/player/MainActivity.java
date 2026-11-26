@@ -28,6 +28,31 @@ public class MainActivity extends Activity {
     private EditText search;
     private String filter = "all";
     private boolean loading;
+    private boolean checkingForeground;
+
+    @Override protected void onStart() {
+        super.onStart();
+        if (SessionStore.isActive() && !loading && !checkingForeground) {
+            checkingForeground = true;
+            io.execute(() -> {
+                try {
+                    JSONObject session = MarcinApi.login(SessionStore.username(), SessionStore.password());
+                    String providerBase = session.getJSONObject("provider").getString("base_url");
+                    SessionStore.updateProviderBase(providerBase);
+                } catch (Exception e) {
+                    SessionStore.clear();
+                    runOnUiThread(() -> {
+                        if (!isFinishing() && !isDestroyed()) {
+                            showLogin();
+                            Toast.makeText(this, safeMessage(e), Toast.LENGTH_LONG).show();
+                        }
+                    });
+                } finally {
+                    checkingForeground = false;
+                }
+            });
+        }
+    }
 
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);
