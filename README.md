@@ -27,7 +27,7 @@ As credenciais ficam somente em memória durante a sessão do aplicativo e são 
 ao sair da conta. O login é revalidado antes de cada reprodução, ao voltar ao player e
 periodicamente durante a reprodução.
 
-O provedor HTTP atualmente configurado no painel é `86kef6r9mb.cloud`. O Android
+O provedor HTTP atualmente configurado no painel é `5yteae.skin`. O Android
 permite tráfego sem TLS somente para esse domínio; prefira HTTPS no fornecedor. Caso
 o domínio HTTP do fornecedor seja alterado, atualize também
 `player/src/main/res/xml/network_security_config.xml`.
