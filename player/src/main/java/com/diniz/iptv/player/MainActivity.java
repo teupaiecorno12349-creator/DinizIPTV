@@ -258,7 +258,6 @@ public class MainActivity extends Activity {
         top.addView(refresh, refreshParams);
         refresh.setOnClickListener(v -> {
             if (loading) return;
-            loading = true;
             Toast.makeText(this, "Atualizando catálogo...", Toast.LENGTH_SHORT).show();
             reloadCatalog();
         });
